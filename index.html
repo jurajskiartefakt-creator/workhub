@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1220">
-<title>WorkHub — lokalne zlecenia</title>
+<title>WorkHub — lokalne zlecenia v3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--ink:#142033;--muted:#667085;--line:#e4e9f0;--blue:#2563eb;--green:#16a34a;--dark:#0b1220;--soft:#eef4ff}
@@ -22,7 +22,7 @@ input,textarea,select{width:100%;padding:12px;border:1px solid var(--line);borde
 .small{font-size:12px}.hero{text-align:center;padding:12px 4px 4px}.hero h1{margin:0 0 6px}.notice{background:#fff8df;border:1px solid #f4df91;padding:11px;border-radius:12px;font-size:12px}
 .qrpreview{display:flex;justify-content:center;padding:18px;background:#fff;border:1px dashed #cbd5e1;border-radius:16px;margin:12px 0}.tag2{display:inline-block;background:#eef4ff;color:#2451a6;border-radius:99px;padding:5px 9px;font-size:11px}
 .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat div{background:#f7f9fc;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-size:18px}
-.hide{display:none!important}
+.photo-preview{max-width:100%;max-height:220px;border-radius:14px;border:1px solid var(--line);margin-top:8px;display:none}.qr-action{background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:14px;margin-top:10px}.hide{display:none!important}
 </style>
 </head>
 <body>
@@ -57,7 +57,7 @@ function home(){
  const p=qrPoint();
  document.getElementById("app").innerHTML=
  `<div class="hero"><h1>Znajdź pracę albo wykonawcę</h1><div class="muted">WorkHub łączy lokalne potrzeby z lokalnymi umiejętnościami.</div></div>
- ${p?`<div class="card" style="border-color:#93c5fd"><span class="tag2">QR AKTYWNY</span><h3>📍 ${esc(p)}</h3><div class="muted">Zeskanowany kod może wskazywać punkt, obiekt lub urządzenie.</div></div>`:""}
+ ${p?`<div class="card" style="border-color:#93c5fd"><span class="tag2">QR AKTYWNY</span><h3>📍 ${esc(p)}</h3><div class="muted">Zeskanowany kod wskazuje konkretny punkt, obiekt lub urządzenie.</div><div class="qr-action"><b>Masz potrzebę w tym miejscu?</b><div class="small" style="margin:5px 0 10px">Opisz problem lub pracę do wykonania — punkt QR zostanie automatycznie przypisany do zlecenia.</div><button class="primary" onclick="add(true)">⚠️ ZGŁOŚ POTRZEBĘ</button></div></div>`:""}
  <div class="card"><h2>Co chcesz zrobić?</h2><div class="grid">
  <button class="primary" onclick="setMode('client')">📣 ZLECAM PRACĘ</button>
  <button class="green" onclick="setMode('worker')">🛠️ SZUKAM ZLECEŃ</button></div></div>
@@ -72,33 +72,45 @@ function jobs(){
  document.getElementById("app").innerHTML=`<div class="card"><div class="row"><div><h2>${worker?"Zlecenia w okolicy":"Lokalne zlecenia"}</h2><div class="muted">${esc(state.area)} i okolice</div></div><span class="pill">${state.jobs.length} ofert</span></div>
  <div class="grid" style="margin:10px 0"><button class="secondary" onclick="setMode('client')">📣 Zlecaj</button><button class="green" onclick="setMode('worker')">🛠️ Szukam</button></div>
  ${state.jobs.map(j=>`<div class="job"><div class="row"><b>${esc(j.title)}</b><span class="price">${esc(j.price)}</span></div>
- <div class="muted">${esc(j.cat)} · 📍 ${esc(j.area)} · ${esc(j.distance)}</div><div class="small">🕐 ${esc(j.when)} ${j.qr?"· 📲 QR":""}</div><p class="small">${esc(j.desc)}</p>
+ <div class="muted">${esc(j.cat)} · 📍 ${esc(j.area)} · ${esc(j.distance)}</div><div class="small">🕐 ${esc(j.when)} ${j.qr?`· 📲 QR ${esc(j.qrId||"")}`:""}</div>${j.qrPoint?`<div class="small">📍 ${esc(j.qrPoint)}</div>`:""}<p class="small">${esc(j.desc)}</p>${j.photo?`<img src="${j.photo}" alt="Zdjęcie zlecenia" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;margin:6px 0">`:""}
  <button class="secondary" onclick="openJob(${j.id})">Zobacz zlecenie</button></div>`).join("")}</div>
  <div class="card"><h3>🎯 Dopasowanie</h3><div class="muted">Docelowo wykonawca zobaczy przede wszystkim zlecenia zgodne z kategoriami umiejętności, obszarem i dostępnością.</div></div>`;
 }
-function add(){
+function add(fromQR=false){
  const p=qrPoint();
- document.getElementById("app").innerHTML=`<div class="card"><h2>➕ Nowe zlecenie</h2><div class="muted">Dodaj potrzebę. Szczegóły, termin i cenę strony ustalają między sobą.</div>
- ${p?`<div class="notice" style="margin:10px 0">📲 Zlecenie z QR: <b>${esc(p)}</b></div>`:""}
- <label>Kategoria</label><select id="cat"><option>Naprawy</option><option>Montaż</option><option>Remont</option><option>Ogród</option><option>Transport</option><option>Pomoc techniczna</option><option>Sprzątanie</option><option>Inne</option></select>
- <label>Tytuł</label><input id="title" placeholder="Np. montaż półki">
- <label>Opis</label><textarea id="desc" placeholder="Opisz, co trzeba zrobić."></textarea>
+ document.getElementById("app").innerHTML=`<div class="card"><h2>${p?"⚠️ Zgłoszenie potrzeby":"➕ Nowe zlecenie"}</h2><div class="muted">${p?"Opisz problem, usterkę albo pracę potrzebną w tym punkcie.":"Dodaj potrzebę. Szczegóły, termin i cenę strony ustalają między sobą."}</div>
+ ${p?`<div class="notice" style="margin:10px 0">📲 <b>Powiązane z QR:</b> ${esc(p)}<br><span class="small">Identyfikator: ${esc(state.qrContext)}</span></div>`:""}
+ <label>Kategoria</label><select id="cat"><option>Naprawy</option><option>Montaż</option><option>Remont</option><option>Ogród</option><option>Transport</option><option>Pomoc techniczna</option><option>Sprzątanie</option><option>Awaria / usterka</option><option>Inne</option></select>
+ <label>Tytuł</label><input id="title" placeholder="Np. uszkodzone drzwi / potrzebny montaż półki">
+ <label>Opis</label><textarea id="desc" placeholder="Co się stało? Co trzeba zrobić? Jakie są najważniejsze szczegóły?"></textarea>
+ <label>Zdjęcie – opcjonalnie</label><input id="photo" type="file" accept="image/*" capture="environment" onchange="previewPhoto(this)"><img id="photoPreview" class="photo-preview" alt="Podgląd zdjęcia">
  <label>Okolica</label><input id="area" value="${esc(p?p.replace(/^Punkt WorkHub – /,""):state.area)}">
  <label>Termin</label><input id="when" placeholder="Np. dzisiaj po 17:00">
  <label>Budżet – opcjonalnie</label><input id="price" placeholder="Np. 100–150 zł / do uzgodnienia">
- <button class="primary" onclick="createJob()">Publikuję zlecenie</button>
+ <button class="primary" onclick="createJob()">${p?"📢 OPUBLIKUJ ZGŁOSZENIE":"📢 Publikuję zlecenie"}</button>
+ <button class="secondary" style="margin-top:8px" onclick="show('home')">← Wróć</button>
  <div class="notice" style="margin-top:12px">ℹ️ Ceny w WorkHub są orientacyjne. Ostateczne wynagrodzenie ustalają zlecający i wykonawca.</div></div>`;
+}
+function previewPhoto(input){
+ const file=input.files&&input.files[0],img=document.getElementById("photoPreview");
+ if(!file||!img)return; const r=new FileReader(); r.onload=()=>{img.src=r.result;img.style.display="block"}; r.readAsDataURL(file);
 }
 function createJob(){
  const title=document.getElementById("title").value.trim();if(!title){alert("Podaj tytuł zlecenia.");return}
- state.jobs.unshift({id:Date.now(),title,cat:document.getElementById("cat").value,area:document.getElementById("area").value||state.area,distance:"lokalnie",price:document.getElementById("price").value||"do uzgodnienia",when:document.getElementById("when").value||"do uzgodnienia",desc:document.getElementById("desc").value||"",status:"open",qr:!!state.qrContext});
- save();alert("Zlecenie dodane do lokalnej wersji testowej WorkHub.");show("jobs");
+ const file=document.getElementById("photo")?.files?.[0];
+ const finish=(photoData="")=>{
+  const job={id:Date.now(),title,cat:document.getElementById("cat").value,area:document.getElementById("area").value||state.area,distance:"lokalnie",price:document.getElementById("price").value||"do uzgodnienia",when:document.getElementById("when").value||"do uzgodnienia",desc:document.getElementById("desc").value||"",status:"open",qr:!!state.qrContext,qrId:state.qrContext||"",qrPoint:qrPoint(),photo:photoData};
+  state.jobs.unshift(job);save();alert(state.qrContext?"Zgłoszenie przypisane do punktu QR i zapisane w wersji testowej WorkHub.":"Zlecenie dodane do lokalnej wersji testowej WorkHub.");show("jobs");
+ };
+ if(file){const r=new FileReader();r.onload=()=>finish(r.result);r.readAsDataURL(file)}else finish();
 }
 function openJob(id){
  const j=state.jobs.find(x=>x.id===id);state.current=id;save();
  document.getElementById("app").innerHTML=`<div class="card"><div class="muted">${esc(j.cat)} · 📍 ${esc(j.area)} · ${esc(j.distance)}</div><h2>${esc(j.title)}</h2><p>${esc(j.desc)}</p>
  <div class="row"><b>💰 ${esc(j.price)}</b><span>🕐 ${esc(j.when)}</span></div><hr style="border:0;border-top:1px solid var(--line);margin:15px 0">
- <div class="muted">Cena i szczegóły są ustalane bezpośrednio przez strony.</div><br>
+ <div class="muted">Cena i szczegóły są ustalane bezpośrednio przez strony.</div>
+ ${j.qrPoint?`<div class="notice" style="margin-top:12px">📲 Zgłoszenie z punktu QR: <b>${esc(j.qrPoint)}</b> · ${esc(j.qrId)}</div>`:""}
+ ${j.photo?`<img src="${j.photo}" alt="Zdjęcie zlecenia" style="width:100%;max-height:280px;object-fit:cover;border-radius:14px;margin-top:12px">`:""}<br>
  <button class="primary" onclick="startChat(${j.id})">💬 Napisz w sprawie zlecenia</button>
  <button class="secondary" style="margin-top:8px" onclick="show('jobs')">← Wróć</button></div>`;
 }
