@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1220">
-<title>WorkHub — lokalne zlecenia v4</title>
+<title>WorkHub — lokalne zlecenia v5</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--ink:#142033;--muted:#667085;--line:#e4e9f0;--blue:#2563eb;--green:#16a34a;--dark:#0b1220;--soft:#eef4ff}
@@ -107,65 +107,67 @@ function previewPhoto(input){
 function createJob(){
  const title=document.getElementById("title").value.trim();
  if(!title){alert("Podaj tytuł zlecenia.");return}
- const file=document.getElementById("photo")?.files?.[0];
 
- const finish=(photoData="")=>{
-  const job={
-    id:Date.now(),
-    title,
-    cat:document.getElementById("cat").value,
-    area:document.getElementById("area").value||state.area,
-    distance:"lokalnie",
-    price:document.getElementById("price").value||"do uzgodnienia",
-    when:document.getElementById("when").value||"do uzgodnienia",
-    desc:document.getElementById("desc").value||"",
-    status:"open",
-    qr:!!state.qrContext,
-    qrId:state.qrContext||"",
-    qrPoint:qrPoint(),
-    photo:photoData
-  };
-  state.jobs.unshift(job);
-
-  if(!save()){
-    // Awaryjnie nie zapisujemy dużego zdjęcia — samo zlecenie pozostaje.
-    state.jobs[0].photo="";
-    if(!save()){
-      state.jobs.shift();
-      alert("Nie udało się zapisać zlecenia. Spróbuj ponownie.");
-      return;
-    }
-    alert("Zlecenie zostało opublikowane bez zdjęcia. Zdjęcie było zbyt duże dla pamięci przeglądarki.");
-  }else{
-    alert(state.qrContext
-      ?"Zgłoszenie przypisane do punktu QR i zapisane w wersji testowej WorkHub."
-      :"Zlecenie dodane do lokalnej wersji testowej WorkHub.");
-  }
-  show("jobs");
+ // Publikujemy najpierw samo zlecenie. Zdjęcie jest dodatkiem i nie może blokować publikacji.
+ const job={
+  id:Date.now(),
+  title,
+  cat:document.getElementById("cat").value,
+  area:document.getElementById("area").value||state.area,
+  distance:"lokalnie",
+  price:document.getElementById("price").value||"do uzgodnienia",
+  when:document.getElementById("when").value||"do uzgodnienia",
+  desc:document.getElementById("desc").value||"",
+  status:"open",
+  qr:!!state.qrContext,
+  qrId:state.qrContext||"",
+  qrPoint:qrPoint(),
+  photo:""
  };
 
- if(!file){finish();return}
+ state.jobs.unshift(job);
+ if(!save()){
+   state.jobs.shift();
+   alert("Nie udało się zapisać zlecenia w pamięci przeglądarki. Spróbuj odświeżyć stronę i ponownie opublikować.");
+   return;
+ }
 
-  // Zmniejszamy zdjęcie przed zapisaniem w localStorage.
-  const img=new Image();
-  const reader=new FileReader();
-  reader.onload=()=>{
+ const file=document.getElementById("photo")?.files?.[0];
+ if(file){
+   const reader=new FileReader();
+   reader.onload=()=>{
+    const img=new Image();
     img.onload=()=>{
-      const max=1200;
-      const scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
-      const w=Math.max(1,Math.round(img.naturalWidth*scale));
-      const h=Math.max(1,Math.round(img.naturalHeight*scale));
-      const canvas=document.createElement("canvas");
-      canvas.width=w; canvas.height=h;
-      const ctx=canvas.getContext("2d");
-      ctx.drawImage(img,0,0,w,h);
-      finish(canvas.toDataURL("image/jpeg",0.68));
+      try{
+        const max=700;
+        const scale=Math.min(1,max/Math.max(img.naturalWidth||700,img.naturalHeight||700));
+        const w=Math.max(1,Math.round((img.naturalWidth||700)*scale));
+        const h=Math.max(1,Math.round((img.naturalHeight||700)*scale));
+        const canvas=document.createElement("canvas");
+        canvas.width=w;canvas.height=h;
+        const ctx=canvas.getContext("2d");
+        ctx.drawImage(img,0,0,w,h);
+        const compressed=canvas.toDataURL("image/jpeg",0.5);
+        const idx=state.jobs.findIndex(x=>x.id===job.id);
+        if(idx>=0){
+          state.jobs[idx].photo=compressed;
+          if(!save()){
+            state.jobs[idx].photo="";
+            save();
+          }
+        }
+      }catch(e){console.warn("Zdjęcie pominięte:",e)}
+      show("jobs");
     };
-    img.onerror=()=>finish("");
+    img.onerror=()=>show("jobs");
     img.src=reader.result;
-  };
-  reader.onerror=()=>finish("");
-  reader.readAsDataURL(file);
+   };
+   reader.onerror=()=>show("jobs");
+   reader.readAsDataURL(file);
+ }else{
+   alert(state.qrContext?"Zgłoszenie zostało opublikowane i przypisane do punktu QR.":"Zlecenie zostało opublikowane.");
+   show("jobs");
+ }
 }
 function openJob(id){
  const j=state.jobs.find(x=>x.id===id);state.current=id;save();
