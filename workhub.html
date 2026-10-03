@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>WorkHub — lokalne zlecenia</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--ink:#142033;--muted:#667085;--line:#e4e9f0;--blue:#2563eb;--green:#16a34a;--dark:#0b1220;--soft:#eef4ff}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(135deg,#0b1220,#172554);color:#fff;padding:22px 18px 28px;border-radius:0 0 24px 24px}
+.logo{font-size:28px;font-weight:800;letter-spacing:-.7px}.tag{opacity:.8;margin-top:3px;font-size:13px}
+main{max-width:760px;margin:auto;padding:16px 14px 90px}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 5px 20px #0b122008}
+h2,h3{margin:0 0 10px}.muted{color:var(--muted);font-size:13px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button,.btn{border:0;border-radius:13px;padding:13px 14px;font-weight:700;font-size:15px;cursor:pointer}.primary{background:var(--blue);color:#fff}.secondary{background:var(--soft);color:#1744a2}.green{background:#eaf8ef;color:#08752f}.dark{background:var(--dark);color:#fff}
+input,textarea,select{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;font:inherit;margin:5px 0 10px;background:#fff}textarea{min-height:90px;resize:vertical}
+.nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:center;z-index:5;padding:7px env(safe-area-inset-right) calc(7px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+.nav button{background:none;color:var(--muted);font-size:12px;padding:8px 15px}.nav button.active{color:var(--blue)}
+.job{border:1px solid var(--line);border-radius:15px;padding:14px;margin:9px 0}.row{display:flex;justify-content:space-between;gap:10px;align-items:center}.pill{font-size:11px;padding:5px 8px;border-radius:99px;background:#eef2f7;color:#4b5563}.price{font-weight:800;color:#0f7a35}.hide{display:none!important}
+.chat{height:55vh;overflow:auto;background:#f7f9fc;border-radius:14px;padding:12px}.msg{max-width:82%;padding:10px 12px;border-radius:14px;margin:7px 0;font-size:14px}.me{background:#dbeafe;margin-left:auto}.them{background:#fff;border:1px solid var(--line)}
+.small{font-size:12px}.hero{text-align:center;padding:12px 4px 4px}.hero h1{font-size:25px;margin:0 0 6px}.qrbox{display:flex;justify-content:center;padding:12px}.notice{background:#fff8df;border:1px solid #f4df91;padding:11px;border-radius:12px;font-size:12px}
+</style>
+</head>
+<body>
+<header><div class="logo">WORKHUB</div><div class="tag">Lokalne zlecenia. Lokalni ludzie.</div></header>
+<main id="app"></main>
+<div class="nav">
+<button onclick="show('home')" id="n-home">⌂<br>Start</button>
+<button onclick="show('jobs')" id="n-jobs">🔧<br>Zlecenia</button>
+<button onclick="show('add')" id="n-add">＋<br>Dodaj</button>
+<button onclick="show('chat')" id="n-chat">💬<br>Czat</button>
+<button onclick="show('profile')" id="n-profile">●<br>Profil</button>
+</div>
+
+<script>
+const KEY='workhub_demo_v1';
+let state=JSON.parse(localStorage.getItem(KEY)||'null')||{
+mode:null, name:'Gość', area:'Zawiercie', jobs:[
+{id:1,title:'Montaż karnisza',cat:'Montaż',area:'Zawiercie',distance:'1,8 km',price:'80–150 zł',when:'Dzisiaj',desc:'Potrzebuję montażu karnisza w salonie.',status:'open'},
+{id:2,title:'Koszenie trawy',cat:'Ogród',area:'Poręba',distance:'6,2 km',price:'120–180 zł',when:'Weekend',desc:'Działka około 500 m².',status:'open'},
+{id:3,title:'Drobna naprawa drzwi',cat:'Naprawy',area:'Zawiercie',distance:'3,1 km',price:'100–200 zł',when:'Do uzgodnienia',desc:'Drzwi wymagają regulacji i poprawienia zawiasu.',status:'open'}
+],messages:[]};
+function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+function show(page){
+ document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
+ const n=document.getElementById('n-'+page); if(n)n.classList.add('active');
+ const a=document.getElementById('app');
+ if(page==='home')a.innerHTML=home();
+ if(page==='jobs')a.innerHTML=jobs();
+ if(page==='add')a.innerHTML=add();
+ if(page==='chat')a.innerHTML=chat();
+ if(page==='profile')a.innerHTML=profile();
+}
+function home(){return `<div class="hero"><h1>Znajdź pracę albo wykonawcę</h1><div class="muted">WorkHub łączy lokalne potrzeby z lokalnymi umiejętnościami.</div></div>
+<div class="card"><h2>Co chcesz zrobić?</h2><div class="grid">
+<button class="primary" onclick="setMode('client')">📣 ZLECAM PRACĘ</button>
+<button class="green" onclick="setMode('worker')">🛠️ SZUKAM ZLECEŃ</button></div></div>
+<div class="card"><h3>📲 Masz kod QR?</h3><div class="muted">Zeskanuj kod WorkHub w punkcie handlowo-usługowym, na obiekcie lub przy urządzeniu i przejdź bezpośrednio do zgłoszenia.</div><br><button class="secondary" onclick="demoQR()">Otwórz przykładowe zgłoszenie z QR</button></div>
+<div class="card"><h3>📍 Twoja okolica</h3><div class="muted">Obszar demonstracyjny: <b>${state.area}</b></div></div>`}
+function setMode(m){state.mode=m;save();show(m==='client'?'add':'jobs')}
+function jobs(){let worker=state.mode==='worker';return `<div class="card"><div class="row"><div><h2>${worker?'Zlecenia w okolicy':'Przeglądaj zlecenia'}</h2><div class="muted">${state.area} i okolice</div></div><span class="pill">${state.jobs.length} ofert</span></div>
+${state.jobs.map(j=>`<div class="job"><div class="row"><b>${j.title}</b><span class="price">${j.price}</span></div><div class="muted">${j.cat} · 📍 ${j.area} · ${j.distance}</div><div class="small">🕐 ${j.when}</div><p class="small">${j.desc}</p><button class="secondary" onclick="openJob(${j.id})">Zobacz zlecenie</button></div>`).join('')}</div>
+<div class="card"><h3>🎯 Dopasowanie lokalne</h3><div class="muted">W kolejnej wersji WorkHub będzie filtrował oferty według kategorii umiejętności, obszaru i dostępności.</div></div>`}
+function add(){return `<div class="card"><h2>➕ Nowe zlecenie</h2><div class="muted">Dodaj zlecenie. Dokładną cenę strony ustalają między sobą.</div>
+<label>Kategoria</label><select id="cat"><option>Naprawy</option><option>Montaż</option><option>Remont</option><option>Ogród</option><option>Transport</option><option>Pomoc techniczna</option><option>Inne</option></select>
+<label>Tytuł</label><input id="title" placeholder="Np. montaż półki">
+<label>Opis</label><textarea id="desc" placeholder="Opisz, co trzeba zrobić. Możesz później dogadać szczegóły na czacie."></textarea>
+<label>Okolica</label><input id="area" value="${state.area}" placeholder="Np. Zawiercie">
+<label>Termin</label><input id="when" placeholder="Np. dzisiaj po 17:00">
+<label>Budżet (opcjonalnie)</label><input id="price" placeholder="Np. 100–150 zł">
+<button class="primary" onclick="createJob()">Publikuję zlecenie</button>
+<div class="notice" style="margin-top:12px">ℹ️ Podane ceny usług w WorkHub mają charakter orientacyjny. Ostateczne wynagrodzenie ustalają zlecający i wykonawca.</div></div>
+<div class="card"><h3>📷 QR</h3><div class="muted">W wersji produkcyjnej każdy punkt/obiekt może mieć własny kod QR, który automatycznie otworzy ten formularz z przypisaną lokalizacją lub obiektem.</div></div>`}
+function createJob(){let title=document.getElementById('title').value.trim();if(!title){alert('Podaj tytuł zlecenia.');return}state.jobs.unshift({id:Date.now(),title,cat:document.getElementById('cat').value,area:document.getElementById('area').value||state.area,distance:'lokalnie',price:document.getElementById('price').value||'do uzgodnienia',when:document.getElementById('when').value||'do uzgodnienia',desc:document.getElementById('desc').value||'',status:'open'});save();alert('Zlecenie zostało dodane.');show('jobs')}
+function openJob(id){let j=state.jobs.find(x=>x.id===id);state.current=id;save();document.getElementById('app').innerHTML=`<div class="card"><div class="muted">${j.cat} · 📍 ${j.area} · ${j.distance}</div><h2>${j.title}</h2><p>${j.desc}</p><div class="row"><b>💰 ${j.price}</b><span>🕐 ${j.when}</span></div><hr style="border:0;border-top:1px solid var(--line);margin:15px 0"><div class="muted">Cena jest ustalana bezpośrednio przez strony.</div><br><button class="primary" onclick="startChat(${j.id})">💬 Napisz w sprawie zlecenia</button><button class="secondary" style="margin-top:8px" onclick="show('jobs')">← Wróć</button></div>`}
+function startChat(id){state.current=id;save();show('chat')}
+function chat(){let j=state.jobs.find(x=>x.id===state.current)||state.jobs[0];let msgs=state.messages.filter(m=>m.job===j.id);return `<div class="card"><h2>💬 Czat zlecenia</h2><div class="muted">🔧 ${j.title} · 📍 ${j.area}</div><div class="chat">${msgs.length?msgs.map(m=>`<div class="msg ${m.me?'me':'them'}">${m.text}</div>`).join(''):`<div class="muted" style="text-align:center;padding:30px 10px">Tu zlecający i wykonawca mogą ustalić szczegóły, termin, cenę i dobrowolnie wymienić dane kontaktowe.</div>`}</div>
+<div class="row" style="margin-top:8px"><input id="msg" placeholder="Napisz wiadomość..." onkeydown="if(event.key==='Enter')send()"><button class="primary" onclick="send()">Wyślij</button></div></div>`}
+function send(){let v=document.getElementById('msg').value.trim();if(!v)return;state.messages.push({job:state.current,text:v,me:true});save();show('chat')}
+function profile(){return `<div class="card"><h2>👤 Profil WorkHub</h2><label>Nazwa / pseudonim</label><input id="name" value="${state.name}"><label>Obszar działania</label><input id="profarea" value="${state.area}"><button class="primary" onclick="saveProfile()">Zapisz</button></div>
+<div class="card"><h3>Tryb użytkownika</h3><div class="grid"><button class="secondary" onclick="setMode('client')">📣 Zlecający</button><button class="green" onclick="setMode('worker')">🛠️ Wykonawca</button></div></div>
+<div class="card"><h3>🔐 Prywatność</h3><div class="muted">W MVP dane profilu są przechowywane lokalnie w przeglądarce. WorkHub nie wymaga publikowania numeru telefonu ani dokładnego adresu. Dane kontaktowe mogą być dobrowolnie wymienione na czacie.</div></div>`}
+function saveProfile(){state.name=document.getElementById('name').value||'Gość';state.area=document.getElementById('profarea').value||'Zawiercie';save();alert('Profil zapisany.');show('profile')}
+function demoQR(){state.mode='client';save();document.getElementById('app').innerHTML=`<div class="card"><h2>📲 Zgłoszenie z kodu QR</h2><div class="notice">Przykład: QR umieszczony przy urządzeniu / w punkcie usługowym może otworzyć gotowy kontekst zgłoszenia.</div><br><div class="qrbox"><div style="font-size:80px">▦</div></div><h3>Co chcesz zgłosić?</h3><input id="title" value="Usterka / potrzeba naprawy"><textarea id="desc" placeholder="Opisz problem..."></textarea><button class="primary" onclick="createJob()">Utwórz zlecenie</button></div>`}
+show('home');
+</script>
+</body>
+</html>
