@@ -479,17 +479,23 @@ async function send(){
  const v=input.value.trim();if(!v)return;
  const ctx=currentChatKey();if(!ctx){alert("Najpierw wybierz zlecenie albo ofertę.");return;}
  const btn=document.getElementById("sendBtn");if(btn)btn.disabled=true;
- const msg={thread:ctx.key,job:ctx.job?String(ctx.job.id):"",jobId:ctx.job?String(ctx.job.id):"",offerId:ctx.offer?String(ctx.offer.id):"",text:v,me:true,author:state.name||"Gość",guestId:state.guestId,toGuestId:ctx.targetGuestId,shared:false,pending:true};
+ const localId="LOCAL_"+Date.now()+"_"+Math.random().toString(36).slice(2,8);
+ const msg={id:localId,thread:ctx.key,job:ctx.job?String(ctx.job.id):"",jobId:ctx.job?String(ctx.job.id):"",offerId:ctx.offer?String(ctx.offer.id):"",text:v,me:true,author:state.name||"Gość",guestId:state.guestId,toGuestId:ctx.targetGuestId,shared:false,pending:true};
  state.messages.push(msg);input.value="";save();renderChat();
- if(!BACKEND_ENABLED){msg.shared=false;msg.pending=false;save();renderChat();if(btn)btn.disabled=false;return;}
+ if(!BACKEND_ENABLED){msg.shared=true;msg.pending=false;save();renderChat();if(btn)btn.disabled=false;return;}
  try{
-   const r=await backendCall("sendMessage",{thread:ctx.key,jobId:ctx.job?String(ctx.job.id):"",offerId:ctx.offer?String(ctx.offer.id):"",text:v,author:state.name||"Gość",guestId:state.guestId,toGuestId:ctx.targetGuestId});
+   const payload={thread:ctx.key,jobId:ctx.job?String(ctx.job.id):"",offerId:ctx.offer?String(ctx.offer.id):"",text:v,author:state.name||"Gość",guestId:state.guestId,toGuestId:ctx.targetGuestId};
+   const r=await backendCall("sendMessage",payload);
    if(!r||!r.ok)throw new Error(r&&r.error||"Nie udało się zapisać wiadomości.");
-   msg.id=r.id;msg.shared=true;msg.pending=false;save();
-   await syncBackend(false);
+   msg.id=String(r.id||localId);msg.toGuestId=String(r.toGuestId||ctx.targetGuestId||"");msg.shared=true;msg.pending=false;msg.failed=false;
+   save();
+   // Nie uruchamiamy synchronizacji natychmiast po wysłaniu. Dzięki temu świeżo
+   // wysłana wiadomość nie może zniknąć przez chwilową niespójność listy backendu.
    renderChat();
+   setTimeout(()=>syncBackend(false),1500);
  }catch(e){
-   msg.pending=false;msg.failed=true;save();renderChat();alert("Wiadomość nie została zapisana w bazie. Sprawdź połączenie i spróbuj ponownie.");
+   msg.pending=false;msg.failed=true;save();renderChat();
+   alert("Wiadomość nie została zapisana w bazie. Sprawdź połączenie i spróbuj ponownie.");
  }finally{if(btn)btn.disabled=false;}
 }
 
