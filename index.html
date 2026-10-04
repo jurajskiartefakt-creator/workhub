@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1220">
-<title>WorkHub — lokalne zlecenia v6</title>
+<title>WorkHub — lokalne zlecenia v7</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--ink:#142033;--muted:#667085;--line:#e4e9f0;--blue:#2563eb;--green:#16a34a;--dark:#0b1220;--soft:#eef4ff}
@@ -83,27 +83,58 @@ function home(){
 function setMode(m){state.mode=m;save();show(m==="client"?"add":"jobs")}
 function jobs(){
  const worker=state.mode==="worker";
- document.getElementById("app").innerHTML=`<div class="card"><div class="row"><div><h2>${worker?"Zlecenia w okolicy":"Lokalne zlecenia i oferty"}</h2><div class="muted">Szukaj po tytule, kategorii, okolicy, opisie lub wykonawcy.</div></div></div>
- <div class="searchbox"><label>🔎 Wyszukiwarka</label><input id="search" placeholder="Np. malowanie, ogród, Zawiercie, transport…" oninput="filterJobs()"><div class="chips" id="chips">${["Wszystko","Naprawy","Montaż","Remont","Ogród","Transport","Sprzątanie","Pomoc techniczna"].map(c=>`<button class="chip ${c==='Wszystko'?'active':''}" onclick="setJobCat('${c.replace(/'/g,"\\'")}')">${c}</button>`).join("")}</div></div>
+ const cats=["Wszystko","Naprawy","Montaż","Remont","Ogród","Transport","Sprzątanie","Pomoc techniczna"];
+ document.getElementById("app").innerHTML=`<div class="card"><div class="row"><div><h2>${worker?"Zlecenia w okolicy":"Lokalne zlecenia i oferty"}</h2><div class="muted">Znajdź konkretną pracę albo wykonawcę w wybranym miejscu.</div></div></div>
+ <div class="searchbox">
+   <label>🔎 <b>Czego szukasz?</b></label>
+   <input id="search" placeholder="np. hydraulik, koszenie, transport…" onkeydown="if(event.key==='Enter')runSearch()">
+   <label>📍 <b>Gdzie?</b></label>
+   <input id="searchArea" value="${esc(state.area)}" placeholder="np. Zawiercie, Poręba, Myszków…" onkeydown="if(event.key==='Enter')runSearch()">
+   <div class="grid" style="margin:4px 0 10px">
+     <button class="primary" onclick="runSearch()">🔎 SZUKAJ</button>
+     <button class="secondary" onclick="clearSearch()">✕ WYCZYŚĆ</button>
+   </div>
+   <div class="small muted" id="searchInfo">Wpisz usługę, rodzaj pracy lub wykonawcę i wybierz miejscowość.</div>
+   <div class="chips" id="chips">${cats.map(c=>`<button class="chip ${c==='Wszystko'?'active':''}" onclick="setJobCat('${c.replace(/'/g,"\\'")}')">${c}</button>`).join("")}</div>
+ </div>
  <div class="grid" style="margin:10px 0"><button id="tabJobs" class="primary" onclick="setJobTab('jobs')">🔧 Zlecenia <span id="jobCount"></span></button><button id="tabOffers" class="green" onclick="setJobTab('offers')">👷 Oferty wykonawców <span id="offerCount"></span></button></div>
  <div id="results"></div>
- <div class="card"><h3>📍 Lokalny zasięg</h3><div class="muted">Domyślnie pokazujemy ${esc(state.area)} i okolice. Wyszukiwarka działa również na innych obszarach.</div></div></div>`;
- state.jobTab="jobs";state.jobCat="Wszystko";filterJobs();
+ <div class="card"><h3>📍 Lokalny zasięg</h3><div class="muted">Możesz zmienić miejscowość w polu „Gdzie?”. Wyszukiwanie działa po całym obszarze zapisanym w ofertach i zleceniach.</div></div></div>`;
+ state.jobTab="jobs";state.jobCat="Wszystko";runSearch();
 }
 function setJobTab(tab){state.jobTab=tab;filterJobs()}
 function setJobCat(cat){state.jobCat=cat;document.querySelectorAll('#chips .chip').forEach(b=>b.classList.toggle('active',b.textContent===cat));filterJobs()}
+function runSearch(){
+ const q=document.getElementById('search')?.value||'';
+ const area=document.getElementById('searchArea')?.value||'';
+ state.searchText=q; state.searchArea=area;
+ filterJobs();
+ const info=document.getElementById('searchInfo');
+ if(info) info.textContent=(q||area)?`Wyniki dla: ${q?`„${q}”`:"wszystkie usługi"}${area?` · 📍 ${area}`:" · 📍 wszystkie miejscowości"}`:"Wszystkie lokalne zlecenia i oferty.";
+}
+function clearSearch(){
+ const q=document.getElementById('search'); const a=document.getElementById('searchArea');
+ if(q)q.value=""; if(a)a.value="";
+ state.searchText="";state.searchArea="";
+ state.jobCat="Wszystko";
+ document.querySelectorAll('#chips .chip').forEach(b=>b.classList.toggle('active',b.textContent==="Wszystko"));
+ runSearch();
+}
 function norm(v){return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function filterJobs(){
- const q=norm(document.getElementById('search')?.value||'');
+ const q=norm(state.searchText||document.getElementById('search')?.value||'');
+ const area=norm(state.searchArea||document.getElementById('searchArea')?.value||'');
  const cat=state.jobCat||'Wszystko';
  const results=document.getElementById('results'); if(!results)return;
  const jobs=state.jobs.filter(j=>{
    const text=norm([j.title,j.desc,j.cat,j.area,j.qrPoint,j.qrId,j.price,j.when].join(' '));
-   return (!q||text.includes(q)) && (cat==='Wszystko'||norm(j.cat)===norm(cat));
+   const place=norm(j.area);
+   return (!q||text.includes(q)) && (!area||place.includes(area)) && (cat==='Wszystko'||norm(j.cat)===norm(cat));
  });
  const offers=(state.offers||[]).filter(o=>{
    const text=norm([o.name,o.service,o.desc,o.cat,o.area,o.availability].join(' '));
-   return (!q||text.includes(q)) && (cat==='Wszystko'||norm(o.cat)===norm(cat));
+   const place=norm(o.area);
+   return (!q||text.includes(q)) && (!area||place.includes(area)) && (cat==='Wszystko'||norm(o.cat)===norm(cat));
  });
  document.getElementById('jobCount').textContent=`(${jobs.length})`;
  document.getElementById('offerCount').textContent=`(${offers.length})`;
