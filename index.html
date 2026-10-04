@@ -251,14 +251,14 @@ function filterJobs(){
  document.getElementById('tabOffers').className=state.jobTab==='offers'?'green':'secondary';
  if(state.jobTab==='jobs'){
    results.innerHTML=jobs.length?jobs.map(j=>`<div class="job"><div class="row"><b>${esc(j.title)}</b><span class="price">${esc(j.price)}</span></div>
-   <div class="muted">${esc(j.cat)} · 📍 ${esc(j.area)} · ${esc(j.distance)}</div><div class="small">🕐 ${esc(j.when)} ${j.qr?`· 📲 QR ${esc(j.qrId||'')}`:''}</div>${j.qrPoint?`<div class="small">📍 ${esc(j.qrPoint)}</div>`:''}<p class="small">${esc(j.desc)}</p>${j.photo?`<img src="${j.photo}" alt="Zdjęcie zlecenia" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;margin:6px 0">`:''}<button class="secondary" onclick="openJob(${JSON.stringify(j.id)})">Zobacz zlecenie</button></div>`).join(''):`<div class="empty">Nie znaleziono zleceń dla podanych kryteriów.</div>`;
+   <div class="muted">${esc(j.cat)} · 📍 ${esc(j.area)} · ${esc(j.distance)}</div><div class="small">🕐 ${esc(j.when)} ${j.qr?`· 📲 QR ${esc(j.qrId||'')}`:''}</div>${j.qrPoint?`<div class="small">📍 ${esc(j.qrPoint)}</div>`:''}<p class="small">${esc(j.desc)}</p>${j.photo?`<img src="${j.photo}" alt="Zdjęcie zlecenia" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;margin:6px 0">`:''}<button class="secondary" onclick='openJob(${JSON.stringify(j.id)})' >Zobacz zlecenie</button></div>`).join(''):`<div class="empty">Nie znaleziono zleceń dla podanych kryteriów.</div>`;
  }else{
-   results.innerHTML=offers.length?offers.map(o=>`<div class="offer"><div class="row"><b>👷 ${esc(o.name)}</b><span class="tag2">${esc(o.cat)}</span></div><h3 style="margin-top:8px">${esc(o.service)}</h3><div class="muted">📍 ${esc(o.area)} · 🕐 ${esc(o.availability)}</div><p class="small">${esc(o.desc)}</p><button class="secondary" onclick="openOffer(${JSON.stringify(o.id)})">Zobacz ofertę</button></div>`).join(''):`<div class="empty">Nie znaleziono ofert wykonawców dla podanych kryteriów.</div>`;
+   results.innerHTML=offers.length?offers.map(o=>`<div class="offer"><div class="row"><b>👷 ${esc(o.name)}</b><span class="tag2">${esc(o.cat)}</span></div><h3 style="margin-top:8px">${esc(o.service)}</h3><div class="muted">📍 ${esc(o.area)} · 🕐 ${esc(o.availability)}</div><p class="small">${esc(o.desc)}</p><button class="secondary" onclick='openOffer(${JSON.stringify(o.id)})' >Zobacz ofertę</button></div>`).join(''):`<div class="empty">Nie znaleziono ofert wykonawców dla podanych kryteriów.</div>`;
  }
 }
 function openOffer(id){
  const o=(state.offers||[]).find(x=>x.id===id);if(!o)return;
- document.getElementById('app').innerHTML=`<div class="card"><div class="muted">${esc(o.cat)} · 📍 ${esc(o.area)}</div><h2>👷 ${esc(o.name)}</h2><h3>${esc(o.service)}</h3><p>${esc(o.desc)}</p><div class="notice">🕐 Dostępność: <b>${esc(o.availability)}</b><br><br>Kontakt może zostać ustalony dobrowolnie przez czat WorkHub.</div><button class="primary" onclick="startOfferChat(${JSON.stringify(o.id)})">💬 Napisz do wykonawcy</button><button class="secondary" style="margin-top:8px" onclick="show('jobs')">← Wróć</button></div>`;
+ document.getElementById('app').innerHTML=`<div class="card"><div class="muted">${esc(o.cat)} · 📍 ${esc(o.area)}</div><h2>👷 ${esc(o.name)}</h2><h3>${esc(o.service)}</h3><p>${esc(o.desc)}</p><div class="notice">🕐 Dostępność: <b>${esc(o.availability)}</b><br><br>Kontakt może zostać ustalony dobrowolnie przez czat WorkHub.</div><button class="primary" onclick='startOfferChat(${JSON.stringify(o.id)})' >💬 Napisz do wykonawcy</button><button class="secondary" style="margin-top:8px" onclick="show('jobs')">← Wróć</button></div>`;
 }
 function startOfferChat(id){state.currentOffer=id;save();show('chat')}
 
@@ -385,7 +385,7 @@ function openJob(id){
  <div class="muted">Cena i szczegóły są ustalane bezpośrednio przez strony.</div>
  ${j.qrPoint?`<div class="notice" style="margin-top:12px">📲 Zgłoszenie z punktu QR: <b>${esc(j.qrPoint)}</b> · ${esc(j.qrId)}</div>`:""}
  ${j.photo?`<img src="${j.photo}" alt="Zdjęcie zlecenia" style="width:100%;max-height:280px;object-fit:cover;border-radius:14px;margin-top:12px">`:""}<br>
- <button class="primary" onclick="startChat(${JSON.stringify(j.id)})">💬 Napisz w sprawie zlecenia</button>
+ <button class="primary" onclick='startChat(${JSON.stringify(j.id)})' >💬 Napisz w sprawie zlecenia</button>
  <button class="secondary" style="margin-top:8px" onclick="show('jobs')">← Wróć</button></div>`;
 }
 function startChat(id){state.current=id;save();show("chat")}
