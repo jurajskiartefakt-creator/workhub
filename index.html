@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1220">
-<title>WorkHub v9 — — lokalne zlecenia v7</title>
+<title>WorkHub v10 — wspólna baza i powiadomienia</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--ink:#142033;--muted:#667085;--line:#e4e9f0;--blue:#2563eb;--green:#16a34a;--dark:#0b1220;--soft:#eef4ff}
@@ -22,7 +22,7 @@ input,textarea,select{width:100%;padding:12px;border:1px solid var(--line);borde
 .small{font-size:12px}.hero{text-align:center;padding:12px 4px 4px}.hero h1{margin:0 0 6px}.notice{background:#fff8df;border:1px solid #f4df91;padding:11px;border-radius:12px;font-size:12px}
 .qrpreview{display:flex;justify-content:center;padding:18px;background:#fff;border:1px dashed #cbd5e1;border-radius:16px;margin:12px 0}.tag2{display:inline-block;background:#eef4ff;color:#2451a6;border-radius:99px;padding:5px 9px;font-size:11px}
 .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat div{background:#f7f9fc;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-size:18px}
-.photo-preview{max-width:100%;max-height:220px;border-radius:14px;border:1px solid var(--line);margin-top:8px;display:none}.qr-action{background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:14px;margin-top:10px}.hide{display:none!important}.searchbox{background:#f7f9fc;border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}.chips{display:flex;gap:7px;overflow:auto;padding:2px 0 4px}.chip{white-space:nowrap;background:#fff;border:1px solid var(--line);color:#475467;border-radius:99px;padding:7px 10px;font-size:12px}.chip.active{background:#eaf1ff;color:#1744a2;border-color:#9bbcff}.empty{text-align:center;padding:24px 10px;color:var(--muted)}.offer{border:1px solid #dce7dd;border-radius:15px;padding:14px;margin:9px 0;background:#fbfffc}
+.photo-preview{max-width:100%;max-height:220px;border-radius:14px;border:1px solid var(--line);margin-top:8px;display:none}.qr-action{background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:14px;margin-top:10px}.hide{display:none!important}.searchbox{background:#f7f9fc;border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}.chips{display:flex;gap:7px;overflow:auto;padding:2px 0 4px}.chip{white-space:nowrap;background:#fff;border:1px solid var(--line);color:#475467;border-radius:99px;padding:7px 10px;font-size:12px}.chip.active{background:#eaf1ff;color:#1744a2;border-color:#9bbcff}.empty{text-align:center;padding:24px 10px;color:var(--muted)}.offer{border:1px solid #dce7dd;border-radius:15px;padding:14px;margin:9px 0;background:#fbfffc}.badge{display:inline-block;min-width:18px;padding:2px 6px;border-radius:99px;background:#dc2626;color:#fff;font-size:10px;line-height:14px;margin-left:3px;vertical-align:top}.notice-item{border:1px solid var(--line);border-radius:14px;padding:12px;margin:8px 0;background:#fff}.notice-item.unread{border-color:#93c5fd;background:#f8fbff}.notif-dot{font-size:9px;color:#dc2626}
 </style>
 </head>
 <body>
@@ -33,6 +33,7 @@ input,textarea,select{width:100%;padding:12px;border:1px solid var(--line);borde
 <button onclick="show('jobs')" id="n-jobs">🔧<br>Zlecenia</button>
 <button onclick="show('add')" id="n-add">＋<br>Dodaj</button>
 <button onclick="show('chat')" id="n-chat">💬<br>Czat</button>
+<button onclick="show('notifications')" id="n-notifications">🔔<span id="notifBadge" class="badge hide">0</span><br>Powiadom.</button>
 <button onclick="show('profile')" id="n-profile">●<br>Profil</button>
 </div>
 <script>
@@ -61,18 +62,40 @@ async function syncBackend(showAlert=false){
   try{
     const r=await backendCall("list");
     if(!r||!r.ok)throw new Error(r&&r.error||"Błąd bazy");
-    const jobs=(r.jobs||[]).map(x=>({id:x.ID,title:x.TYTUL,cat:x.KATEGORIA,area:x.OBSZAR,price:x.CENA,when:x.TERMIN,desc:x.OPIS,status:x.STATUS||"open",qr:!!x.QR_ID,qrId:x.QR_ID||"",qrPoint:x.QR_PUNKT||"",author:x.AUTOR||"",photo:"",shared:true}));
-    const offers=(r.offers||[]).map(x=>({id:x.ID,name:x.NAZWA,service:x.USŁUGA,cat:x.KATEGORIA,area:x.OBSZAR,desc:x.OPIS,availability:x.DOSTĘPNOŚĆ,author:x.AUTOR||"",shared:true}));
-    const messages=(r.messages||[]).map(x=>({id:x.ID,thread:x.THREAD,jobId:x.JOB_ID||"",offerId:x.OFFER_ID||"",text:x.TEKST,author:x.AUTOR||"",me:x.AUTOR===state.name}));
+    const rawJobs=r.jobs||[], rawOffers=r.offers||[], rawMessages=r.messages||[];
+    const oldJobIds=new Set((state.knownRemote.jobs||[]));
+    const oldOfferIds=new Set((state.knownRemote.offers||[]));
+    const oldMsgIds=new Set((state.knownRemote.messages||[]));
+    const firstSync=!state.backendInitialized;
+    const jobs=rawJobs.map(x=>({id:x.ID,title:x.TYTUL,cat:x.KATEGORIA,area:x.OBSZAR,price:x.CENA,when:x.TERMIN,desc:x.OPIS,status:x.STATUS||"open",qr:!!x.QR_ID,qrId:x.QR_ID||"",qrPoint:x.QR_PUNKT||"",author:x.AUTOR||"",createdAt:x.UTWORZONO||"",photo:"",shared:true}));
+    const offers=rawOffers.map(x=>({id:x.ID,name:x.NAZWA,service:x.USŁUGA,cat:x.KATEGORIA,area:x.OBSZAR,desc:x.OPIS,availability:x.DOSTĘPNOŚĆ,author:x.AUTOR||"",createdAt:x.UTWORZONO||"",shared:true}));
+    const messages=rawMessages.map(x=>({id:x.ID,thread:x.THREAD,jobId:x.JOB_ID||"",offerId:x.OFFER_ID||"",text:x.TEKST,author:x.AUTOR||"",createdAt:x.UTWORZONO||"",me:x.AUTOR===state.name,shared:true}));
+    const newJobs=firstSync?[]:jobs.filter(j=>!oldJobIds.has(j.id));
+    const newOffers=firstSync?[]:offers.filter(o=>!oldOfferIds.has(o.id));
+    const newMessages=firstSync?[]:messages.filter(m=>!oldMsgIds.has(m.id) && m.author!==state.name);
     state.jobs=[...jobs,...state.jobs.filter(j=>!j.shared)];
     state.offers=[...offers,...state.offers.filter(o=>!o.shared)];
     state.messages=[...messages,...state.messages.filter(m=>!m.shared)];
+    state.knownRemote={jobs:jobs.map(j=>j.id),offers:offers.map(o=>o.id),messages:messages.map(m=>m.id)};
+    state.backendInitialized=true;
     save();
+    // Powiadomienia są kierowane zgodnie z rolą użytkownika, ale pozostają widoczne w historii.
+    if(!firstSync){
+      if(state.mode==="worker") newJobs.forEach(j=>addNotification("job","🆕 Nowe zlecenie",`${j.title} · ${j.area}${j.price?` · ${j.price}`:""}`,j.id));
+      if(state.mode==="client") newOffers.forEach(o=>addNotification("offer","👷 Nowa oferta wykonawcy",`${o.service} · ${o.area} · ${o.name}`,o.id));
+      newMessages.forEach(m=>addNotification("message","💬 Nowa wiadomość",`${m.author||"Użytkownik"}: ${m.text}`,m.thread));
+    }
     if(showAlert)alert("WorkHub połączony ze wspólną bazą.");
+    updateNotifBadge();
     return true;
   }catch(e){console.warn(e);if(showAlert)alert("Baza WorkHub jest chwilowo niedostępna. Aplikacja pozostaje w trybie lokalnym.");return false}
   finally{backendBusy=false}
 }
+function startPolling(){
+  if(!BACKEND_ENABLED)return;
+  setInterval(()=>syncBackend(false),30000);
+}
+
 const KEY="workhub_v2";
 let state=JSON.parse(localStorage.getItem(KEY)||"null")||{
  mode:null,name:"Gość",area:"Zawiercie",qrContext:"",
@@ -85,8 +108,48 @@ let state=JSON.parse(localStorage.getItem(KEY)||"null")||{
   {id:101,name:"Marek",service:"Montaż i drobne naprawy",cat:"Montaż",area:"Zawiercie",desc:"Karnisze, półki, uchwyty, drobne prace domowe.",availability:"Popołudnia"},
   {id:102,name:"Ania",service:"Ogród i porządki",cat:"Ogród",area:"Poręba",desc:"Koszenie, przycinanie, porządki na działkach.",availability:"Weekendy"},
   {id:103,name:"Tomek",service:"Transport lokalny",cat:"Transport",area:"Zawiercie",desc:"Mały transport i pomoc przy przewozie rzeczy.",availability:"Do uzgodnienia"}
- ],messages:[],current:null
+ ],messages:[],current:null,currentOffer:null,notifications:[],backendInitialized:false,knownRemote:{jobs:[],offers:[],messages:[]}
 };
+// Uzupełnienie pól dodanych w v10 dla istniejących użytkowników.
+state.notifications=Array.isArray(state.notifications)?state.notifications:[];
+state.knownRemote=state.knownRemote||{jobs:[],offers:[],messages:[]};
+state.backendInitialized=!!state.backendInitialized;
+state.currentOffer=state.currentOffer||null;
+function unreadCount(){return state.notifications.filter(n=>!n.read).length}
+function updateNotifBadge(){const b=document.getElementById("notifBadge");if(!b)return;const n=unreadCount();b.textContent=n>99?"99+":String(n);b.classList.toggle("hide",n===0)}
+function addNotification(type,title,text,ref){
+ const n={id:"N"+Date.now()+Math.random().toString(36).slice(2,6),type,title,text,ref:ref||"",read:false,createdAt:new Date().toISOString()};
+ state.notifications.unshift(n);
+ state.notifications=state.notifications.slice(0,100);
+ save(); updateNotifBadge();
+ if(document.visibilityState!=="visible" || type==="message") notifyBrowser(title,text);
+}
+function notifyBrowser(title,text){
+ try{if("Notification" in window && Notification.permission==="granted") new Notification(title,{body:text});}catch(e){}
+}
+async function enableNotifications(){
+ if(!("Notification" in window)){alert("Ta przeglądarka nie obsługuje powiadomień systemowych. Powiadomienia WorkHub w aplikacji nadal będą działać.");return}
+ try{const p=await Notification.requestPermission();if(p==="granted")alert("Powiadomienia systemowe WorkHub są włączone.");else alert("Powiadomienia systemowe nie zostały włączone. Powiadomienia w aplikacji nadal będą działać.");}catch(e){alert("Nie udało się włączyć powiadomień systemowych.");}
+}
+function notifications(){
+ const list=state.notifications||[];
+ document.getElementById("app").innerHTML=`<div class="card"><div class="row"><div><h2>🔔 Powiadomienia</h2><div class="muted">Nowe zlecenia, oferty wykonawców i wiadomości.</div></div><button class="secondary" onclick="markAllNotificationsRead()">Oznacz jako przeczytane</button></div>
+ ${list.length?list.map(n=>`<div class="notice-item ${n.read?"":"unread"}" onclick="openNotification('${esc(n.id)}')"><div class="row"><b>${esc(n.title)}</b><span class="small muted">${n.read?"":"NOWE"}</span></div><div class="small" style="margin-top:5px">${esc(n.text)}</div></div>`).join(""):`<div class="empty">Brak powiadomień.</div>`}</div>
+ <div class="card"><h3>📲 Powiadomienia systemowe</h3><div class="muted">Jeśli chcesz, WorkHub może pokazywać powiadomienia przeglądarki, gdy aplikacja jest otwarta.</div><br><button class="primary" onclick="enableNotifications()">🔔 Włącz powiadomienia</button></div>`;
+ updateNotifBadge();
+}
+function markAllNotificationsRead(){state.notifications.forEach(n=>n.read=true);save();updateNotifBadge();notifications()}
+function openNotification(id){
+ const n=state.notifications.find(x=>x.id===id);if(!n)return;
+ n.read=true;save();updateNotifBadge();
+ if(n.type==="message"){
+   state.currentOffer=null;
+   if(String(n.ref).startsWith("job:")) state.current=String(n.ref).slice(4);
+   if(String(n.ref).startsWith("offer:")){state.current=null;state.currentOffer=String(n.ref).slice(6);}
+   save();show("chat");
+ }else{show("jobs");}
+}
+
 function save(){
   try{
     localStorage.setItem(KEY,JSON.stringify(state));
@@ -101,7 +164,7 @@ function esc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 function show(page){
  document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
  const n=document.getElementById("n-"+page);if(n)n.classList.add("active");
- if(page==="home")home();if(page==="jobs")jobs();if(page==="add")add();if(page==="chat")chat();if(page==="profile")profile();
+ if(page==="home")home();if(page==="jobs")jobs();if(page==="add")add();if(page==="chat")chat();if(page==="notifications")notifications();if(page==="profile")profile();
 }
 function qrPoint(){return state.qrContext?({ZAW001:"Punkt WorkHub – Zawiercie",POR001:"Punkt WorkHub – Poręba"}[state.qrContext]||("Punkt WorkHub – "+state.qrContext)):""}
 function home(){
@@ -115,7 +178,8 @@ function home(){
  <div class="card"><h3>📲 WorkHub QR</h3><div class="muted">Kody mogą być umieszczane w sklepach, punktach usługowych, budynkach i przy urządzeniach.</div><br>
  <button class="secondary" onclick="qrManager()">Pokaż przykładowy QR</button></div>
  <div class="card"><h3>📍 Twoja okolica</h3><div class="muted">Obszar: <b>${esc(state.area)}</b></div><br>
- <div class="stat"><div><b>${state.jobs.length}</b><span class="small">zleceń</span></div><div><b>lokalnie</b><span class="small">dopasowanie</span></div><div><b>24/7</b><span class="small">dostęp</span></div></div></div>`;
+ <div class="stat"><div><b>${state.jobs.length}</b><span class="small">zleceń</span></div><div><b>lokalnie</b><span class="small">dopasowanie</span></div><div><b>24/7</b><span class="small">dostęp</span></div></div></div>
+ <div class="card"><div class="row"><div><h3>🔔 Co nowego?</h3><div class="muted">${unreadCount()?`Masz <b>${unreadCount()}</b> nieprzeczytanych powiadomień.`:"Brak nowych powiadomień."}</div></div><button class="secondary" onclick="show('notifications')">Zobacz</button></div></div>`;
 }
 function setMode(m){state.mode=m;save();show(m==="client"?"add":"jobs")}
 function jobs(){
@@ -190,9 +254,11 @@ function openOffer(id){
 }
 function startOfferChat(id){state.currentOffer=id;save();show('chat')}
 
-function add(fromQR=false){
+function add(fromQR=false,forceType=""){
  const p=qrPoint();
- document.getElementById("app").innerHTML=`<div class="card"><h2>${p?"⚠️ Zgłoszenie potrzeby":"➕ Nowe zlecenie"}</h2><div class="muted">${p?"Opisz problem, usterkę albo pracę potrzebną w tym punkcie.":"Dodaj potrzebę. Szczegóły, termin i cenę strony ustalają między sobą."}</div>
+ const type=fromQR?"job":(forceType||(state.mode==="worker"?"offer":"job"));
+ if(type==="offer"&&!p){addOffer();return;}
+ document.getElementById("app").innerHTML=`<div class="card"><div class="grid"><button class="primary" onclick="add(false,'job')">📣 Zgłaszam potrzebę</button><button class="green" onclick="add(false,'offer')">🛠️ Oferuję usługi</button></div><h2 style="margin-top:14px">${p?"⚠️ Zgłoszenie potrzeby":"➕ Nowe zlecenie"}</h2><div class="muted">${p?"Opisz problem, usterkę albo pracę potrzebną w tym punkcie.":"Dodaj potrzebę. Szczegóły, termin i cenę strony ustalają między sobą."}</div>
  ${p?`<div class="notice" style="margin:10px 0">📲 <b>Powiązane z QR:</b> ${esc(p)}<br><span class="small">Identyfikator: ${esc(state.qrContext)}</span></div>`:""}
  <label>Kategoria</label><select id="cat"><option>Naprawy</option><option>Montaż</option><option>Remont</option><option>Ogród</option><option>Transport</option><option>Pomoc techniczna</option><option>Sprzątanie</option><option>Awaria / usterka</option><option>Inne</option></select>
  <label>Tytuł</label><input id="title" placeholder="Np. uszkodzone drzwi / potrzebny montaż półki">
@@ -204,6 +270,28 @@ function add(fromQR=false){
  <button class="primary" onclick="createJob()">${p?"📢 OPUBLIKUJ ZGŁOSZENIE":"📢 Publikuję zlecenie"}</button>
  <button class="secondary" style="margin-top:8px" onclick="show('home')">← Wróć</button>
  <div class="notice" style="margin-top:12px">ℹ️ Ceny w WorkHub są orientacyjne. Ostateczne wynagrodzenie ustalają zlecający i wykonawca.</div></div>`;
+}
+function addOffer(){
+ document.getElementById("app").innerHTML=`<div class="card"><div class="grid"><button class="primary" onclick="add(false,'job')">📣 Zgłaszam potrzebę</button><button class="green" onclick="add(false,'offer')">🛠️ Oferuję usługi</button></div><h2 style="margin-top:14px">🛠️ Nowa oferta wykonawcy</h2><div class="muted">Pokaż lokalnym zlecającym, co potrafisz i gdzie możesz pracować.</div>
+ <label>Nazwa / pseudonim</label><input id="offerName" value="${esc(state.name&&state.name!=="Gość"?state.name:"")}" placeholder="Np. Marek">
+ <label>Usługa</label><input id="offerService" placeholder="Np. hydraulika, montaż, koszenie…">
+ <label>Kategoria</label><select id="offerCat"><option>Naprawy</option><option>Montaż</option><option>Remont</option><option>Ogród</option><option>Transport</option><option>Pomoc techniczna</option><option>Sprzątanie</option><option>Inne</option></select>
+ <label>Obszar działania</label><input id="offerArea" value="${esc(state.area)}" placeholder="Np. Zawiercie i okolice">
+ <label>Opis</label><textarea id="offerDesc" placeholder="Co wykonujesz? Jakie prace? Jakie masz doświadczenie lub sprzęt?"></textarea>
+ <label>Dostępność</label><input id="offerAvailability" placeholder="Np. popołudnia, weekendy, do uzgodnienia">
+ <button class="green" onclick="createOffer()">📢 OPUBLIKUJ OFERTĘ</button><button class="secondary" style="margin-top:8px" onclick="show('home')">← Wróć</button>
+ <div class="notice" style="margin-top:12px">ℹ️ Kontakt i szczegóły zlecenia ustalacie dobrowolnie przez czat WorkHub.</div></div>`;
+}
+function createOffer(){
+ const name=document.getElementById("offerName").value.trim()||state.name||"Gość";
+ const service=document.getElementById("offerService").value.trim();
+ if(!service){alert("Podaj nazwę usługi.");return;}
+ const offer={id:Date.now(),name,service,cat:document.getElementById("offerCat").value,area:document.getElementById("offerArea").value||state.area,desc:document.getElementById("offerDesc").value||"",availability:document.getElementById("offerAvailability").value||"Do uzgodnienia"};
+ state.offers.unshift(offer);
+ state.mode="worker";
+ save();
+ if(BACKEND_ENABLED){backendCall("createOffer",{name:offer.name,service:offer.service,cat:offer.cat,area:offer.area,desc:offer.desc,availability:offer.availability,author:state.name||offer.name}).then(r=>{if(r&&r.ok){const idx=state.offers.findIndex(x=>x.id===offer.id);if(idx>=0){state.offers[idx].id=r.id;state.offers[idx].shared=true;save();}}else console.warn("Nie zapisano oferty:",r);}).catch(e=>console.warn(e));}
+ alert("Oferta wykonawcy została opublikowana.");show("jobs");
 }
 function previewPhoto(input){
  const file=input.files&&input.files[0],img=document.getElementById("photoPreview");
@@ -313,6 +401,7 @@ function send(){
 function profile(){
  document.getElementById("app").innerHTML=`<div class="card"><h2>👤 Profil WorkHub</h2><label>Nazwa / pseudonim</label><input id="name" value="${esc(state.name)}"><label>Obszar działania</label><input id="profarea" value="${esc(state.area)}"><button class="primary" onclick="saveProfile()">Zapisz</button></div>
  <div class="card"><h3>Tryb użytkownika</h3><div class="grid"><button class="secondary" onclick="setMode('client')">📣 Zlecający</button><button class="green" onclick="setMode('worker')">🛠️ Wykonawca</button></div></div>
+ <div class="card"><h3>🔔 Powiadomienia</h3><div class="muted">W trybie „Szukam zleceń” dostaniesz informacje o nowych zleceniach. W trybie „Zlecam pracę” — o nowych ofertach wykonawców. Czat może sygnalizować nowe wiadomości.</div><br><button class="secondary" onclick="show('notifications')">🔔 Otwórz powiadomienia</button> <button class="primary" onclick="enableNotifications()">Włącz systemowe</button></div>
  <div class="card"><h3>☁️ Wspólna baza</h3><div class="muted">Po podłączeniu bazy zlecenia i wiadomości są dostępne na różnych telefonach i komputerach.</div><br><button class="secondary" onclick="syncBackend(true)">🔄 Sprawdź połączenie z bazą</button></div>
  <div class="card"><h3>🔐 Prywatność</h3><div class="muted">WorkHub projektujemy w modelu minimalizacji danych. Numer telefonu, dokładny adres i inne dane kontaktowe nie są wymagane. Strony mogą dobrowolnie wymienić dane na czacie.</div></div>
  <div class="card"><h3>📲 QR punktu</h3><button class="secondary" onclick="qrManager()">Otwórz generator QR</button></div>`;
@@ -330,7 +419,8 @@ function makeQR(){
 }
 (function init(){
  const p=new URLSearchParams(location.search).get("qr");if(p)state.qrContext=p;save();show("home");
- if(BACKEND_ENABLED) setTimeout(()=>syncBackend(false),250);
+ if(BACKEND_ENABLED) {setTimeout(()=>syncBackend(false),250);startPolling();}
+ updateNotifBadge();
 })();
 </script>
 </body>
