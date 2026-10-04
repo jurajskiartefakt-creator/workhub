@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1220">
-<title>WorkHub v10 — wspólna baza i powiadomienia</title>
+<title>WorkHub v11 — wspólna baza i powiadomienia</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--ink:#142033;--muted:#667085;--line:#e4e9f0;--blue:#2563eb;--green:#16a34a;--dark:#0b1220;--soft:#eef4ff}
@@ -73,9 +73,17 @@ async function syncBackend(showAlert=false){
     const newJobs=firstSync?[]:jobs.filter(j=>!oldJobIds.has(j.id));
     const newOffers=firstSync?[]:offers.filter(o=>!oldOfferIds.has(o.id));
     const newMessages=firstSync?[]:messages.filter(m=>!oldMsgIds.has(m.id) && m.author!==state.name);
-    state.jobs=[...jobs,...state.jobs.filter(j=>!j.shared)];
-    state.offers=[...offers,...state.offers.filter(o=>!o.shared)];
-    state.messages=[...messages,...state.messages.filter(m=>!m.shared)];
+    // Nie usuwaj lokalnych danych tylko dlatego, że chwilowo nie ma ich w odpowiedzi backendu.
+    // To chroni m.in. zlecenia utworzone przed synchronizacją albo oczekujące na zapis.
+    const remoteJobIds=new Set(jobs.map(j=>String(j.id)));
+    const remoteOfferIds=new Set(offers.map(o=>String(o.id)));
+    const remoteMessageIds=new Set(messages.map(m=>String(m.id)));
+    const localJobs=(state.jobs||[]).filter(j=>!remoteJobIds.has(String(j.id)));
+    const localOffers=(state.offers||[]).filter(o=>!remoteOfferIds.has(String(o.id)));
+    const localMessages=(state.messages||[]).filter(m=>!remoteMessageIds.has(String(m.id)));
+    state.jobs=[...jobs,...localJobs];
+    state.offers=[...offers,...localOffers];
+    state.messages=[...messages,...localMessages];
     state.knownRemote={jobs:jobs.map(j=>j.id),offers:offers.map(o=>o.id),messages:messages.map(m=>m.id)};
     state.backendInitialized=true;
     save();
