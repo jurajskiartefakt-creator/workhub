@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1220">
-<title>WorkHub — lokalne zlecenia v7</title>
+<title>WorkHub v9 — — lokalne zlecenia v7</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--ink:#142033;--muted:#667085;--line:#e4e9f0;--blue:#2563eb;--green:#16a34a;--dark:#0b1220;--soft:#eef4ff}
@@ -36,6 +36,43 @@ input,textarea,select{width:100%;padding:12px;border:1px solid var(--line);borde
 <button onclick="show('profile')" id="n-profile">●<br>Profil</button>
 </div>
 <script>
+// ===== WORKHUB WSPÓLNA BAZA =====
+// Po wdrożeniu Google Apps Script wklej tutaj URL Web App.
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbw_SxYnRGlUWk6iMHemDNWXcdO16VQgqKbvCkzycT58l1oW4dQngR_glPfa3YW68CWv/exec";
+const BACKEND_ENABLED = BACKEND_URL.startsWith("https://script.google.com/");
+let backendBusy = false;
+function backendCall(action, data){
+  return new Promise((resolve,reject)=>{
+    if(!BACKEND_ENABLED){resolve({ok:false,disabled:true});return;}
+    const cb="whcb_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+    const timer=setTimeout(()=>{cleanup();reject(new Error("Przekroczono czas połączenia z bazą WorkHub."));},12000);
+    function cleanup(){clearTimeout(timer);delete window[cb];if(script&&script.parentNode)script.parentNode.removeChild(script)}
+    window[cb]=(res)=>{cleanup();resolve(res)};
+    const script=document.createElement("script");
+    let url=BACKEND_URL+"?action="+encodeURIComponent(action)+"&callback="+encodeURIComponent(cb);
+    if(data)url+="&data="+encodeURIComponent(JSON.stringify(data));
+    script.src=url;script.onerror=()=>{cleanup();reject(new Error("Nie udało się połączyć z bazą WorkHub."))};
+    document.head.appendChild(script);
+  });
+}
+async function syncBackend(showAlert=false){
+  if(!BACKEND_ENABLED||backendBusy)return false;
+  backendBusy=true;
+  try{
+    const r=await backendCall("list");
+    if(!r||!r.ok)throw new Error(r&&r.error||"Błąd bazy");
+    const jobs=(r.jobs||[]).map(x=>({id:x.ID,title:x.TYTUL,cat:x.KATEGORIA,area:x.OBSZAR,price:x.CENA,when:x.TERMIN,desc:x.OPIS,status:x.STATUS||"open",qr:!!x.QR_ID,qrId:x.QR_ID||"",qrPoint:x.QR_PUNKT||"",author:x.AUTOR||"",photo:"",shared:true}));
+    const offers=(r.offers||[]).map(x=>({id:x.ID,name:x.NAZWA,service:x.USŁUGA,cat:x.KATEGORIA,area:x.OBSZAR,desc:x.OPIS,availability:x.DOSTĘPNOŚĆ,author:x.AUTOR||"",shared:true}));
+    const messages=(r.messages||[]).map(x=>({id:x.ID,thread:x.THREAD,jobId:x.JOB_ID||"",offerId:x.OFFER_ID||"",text:x.TEKST,author:x.AUTOR||"",me:x.AUTOR===state.name}));
+    state.jobs=[...jobs,...state.jobs.filter(j=>!j.shared)];
+    state.offers=[...offers,...state.offers.filter(o=>!o.shared)];
+    state.messages=[...messages,...state.messages.filter(m=>!m.shared)];
+    save();
+    if(showAlert)alert("WorkHub połączony ze wspólną bazą.");
+    return true;
+  }catch(e){console.warn(e);if(showAlert)alert("Baza WorkHub jest chwilowo niedostępna. Aplikacja pozostaje w trybie lokalnym.");return false}
+  finally{backendBusy=false}
+}
 const KEY="workhub_v2";
 let state=JSON.parse(localStorage.getItem(KEY)||"null")||{
  mode:null,name:"Gość",area:"Zawiercie",qrContext:"",
@@ -201,6 +238,14 @@ function createJob(){
  }
 
  const file=document.getElementById("photo")?.files?.[0];
+ const sharedPayload={title:job.title,cat:job.cat,area:job.area,price:job.price,when:job.when,desc:job.desc,qrId:job.qrId,qrPoint:job.qrPoint,author:state.name||"Gość"};
+ if(BACKEND_ENABLED){
+   backendCall("createJob",sharedPayload).then(r=>{
+     if(r&&r.ok){
+       const idx=state.jobs.findIndex(x=>x.id===job.id);if(idx>=0){state.jobs[idx].id=r.id;state.jobs[idx].shared=true;save();}
+     }else console.warn("Nie zapisano w bazie:",r);
+   }).catch(e=>console.warn(e));
+ }
  if(file){
    const reader=new FileReader();
    reader.onload=()=>{
@@ -258,10 +303,17 @@ function chat(){
  <div class="row" style="margin-top:8px"><input id="msg" placeholder="Napisz wiadomość..." onkeydown="if(event.key==='Enter')send()"><button class="primary" onclick="send()">Wyślij</button></div></div>`;
 }
 
-function send(){const v=document.getElementById("msg").value.trim();if(!v)return;const thread=state.currentOffer?"offer:"+state.currentOffer:"job:"+state.current;state.messages.push({thread,job:state.current,text:v,me:true});save();show("chat")}
+function send(){
+ const v=document.getElementById("msg").value.trim();if(!v)return;
+ const thread=state.currentOffer?"offer:"+state.currentOffer:"job:"+state.current;
+ const msg={thread,job:state.current,offerId:state.currentOffer||"",text:v,me:true,author:state.name||"Gość"};
+ state.messages.push(msg);save();show("chat");
+ if(BACKEND_ENABLED){backendCall("sendMessage",{thread,jobId:state.current||"",offerId:state.currentOffer||"",text:v,author:state.name||"Gość"}).then(r=>{if(r&&r.ok){msg.id=r.id;msg.shared=true;save()}}).catch(e=>console.warn(e));}
+}
 function profile(){
  document.getElementById("app").innerHTML=`<div class="card"><h2>👤 Profil WorkHub</h2><label>Nazwa / pseudonim</label><input id="name" value="${esc(state.name)}"><label>Obszar działania</label><input id="profarea" value="${esc(state.area)}"><button class="primary" onclick="saveProfile()">Zapisz</button></div>
  <div class="card"><h3>Tryb użytkownika</h3><div class="grid"><button class="secondary" onclick="setMode('client')">📣 Zlecający</button><button class="green" onclick="setMode('worker')">🛠️ Wykonawca</button></div></div>
+ <div class="card"><h3>☁️ Wspólna baza</h3><div class="muted">Po podłączeniu bazy zlecenia i wiadomości są dostępne na różnych telefonach i komputerach.</div><br><button class="secondary" onclick="syncBackend(true)">🔄 Sprawdź połączenie z bazą</button></div>
  <div class="card"><h3>🔐 Prywatność</h3><div class="muted">WorkHub projektujemy w modelu minimalizacji danych. Numer telefonu, dokładny adres i inne dane kontaktowe nie są wymagane. Strony mogą dobrowolnie wymienić dane na czacie.</div></div>
  <div class="card"><h3>📲 QR punktu</h3><button class="secondary" onclick="qrManager()">Otwórz generator QR</button></div>`;
 }
@@ -278,6 +330,7 @@ function makeQR(){
 }
 (function init(){
  const p=new URLSearchParams(location.search).get("qr");if(p)state.qrContext=p;save();show("home");
+ if(BACKEND_ENABLED) setTimeout(()=>syncBackend(false),250);
 })();
 </script>
 </body>
