@@ -50,7 +50,8 @@ function nav(){return `<nav class="bottom"><button data-nav="home">🏠<br>Start
 function render(){let content=!state.onboarded?welcome():state.view==='home'?home():state.view==='add'?add():state.view==='detail'?detail():state.view==='chat'?chat():state.view==='favorites'?favorites():state.view==='inbox'?inbox():profile();document.getElementById('app').innerHTML=content+(state.onboarded?nav():'')+modal();bind()}
 function favorites(){const a=state.market.filter(x=>state.favorites.includes(x.ID));return `<div class="wrap"><section class="card"><h2>⭐ Obserwowane</h2>${a.length?a.map(card).join(''):'<div class="empty">Nie obserwujesz jeszcze żadnej oferty.</div>'}</section></div>`}
 function bind(){
-document.querySelectorAll('[data-role]').forEach(b=>b.onclick=()=>{state.role=b.dataset.role;render()});
+document.querySelectorAll('[data-role]').forEach(b=>b.onclick=()=>{state.login=(document.getElementById('login')?.value||state.login||'').trim().replace(/\s+/g,' ');state.role=b.dataset.role;save();render()});
+const loginInput=document.getElementById('login');if(loginInput)loginInput.oninput=()=>{state.login=loginInput.value;save()};
 const enter=document.getElementById('enter');if(enter)enter.onclick=async()=>{const v=(document.getElementById('login').value||'').trim().replace(/\s+/g,' ');if(v.length<3)return alert('Login powinien mieć co najmniej 3 znaki.');state.login=v;state.onboarded=true;state.side=state.role==='SELL'?'SELL':state.role==='BROWSE'?'ALL':'BUY';state.locationPrompt=true;save();render();try{await backend('registerGuest',{guestId,login:state.login,role:state.role})}catch{}};
 const confirm=document.getElementById('confirm');if(confirm)confirm.onclick=()=>getLocation();
 const later=document.getElementById('later');if(later)later.onclick=()=>{state.locationPrompt=false;save();render()};
