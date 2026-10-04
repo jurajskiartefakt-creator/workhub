@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1220">
-<title>WorkHub v14 — lokalny marketplace</title>
+<title>WorkHub v15 — komunikacja</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--ink:#142033;--muted:#667085;--line:#e4e9f0;--blue:#2563eb;--green:#16a34a;--dark:#0b1220;--soft:#eef4ff}
@@ -42,6 +42,7 @@ input,textarea,select{width:100%;padding:12px;border:1px solid var(--line);borde
 const BACKEND_URL = "https://script.google.com/macros/s/AKfycbw_SxYnRGlUWk6iMHemDNWXcdO16VQgqKbvCkzycT58l1oW4dQngR_glPfa3YW68CWv/exec";
 const BACKEND_ENABLED = BACKEND_URL.startsWith("https://script.google.com/");
 let backendBusy = false;
+let chatPollTimer = null;
 function backendCall(action, data){
   return new Promise((resolve,reject)=>{
     if(!BACKEND_ENABLED){resolve({ok:false,disabled:true});return;}
@@ -60,7 +61,7 @@ async function syncBackend(showAlert=false){
   if(!BACKEND_ENABLED||backendBusy)return false;
   backendBusy=true;
   try{
-    const r=await backendCall("list");
+    const r=await backendCall("list",{guestId:state.guestId});
     if(!r||!r.ok)throw new Error(r&&r.error||"Błąd bazy");
     const rawJobs=r.jobs||[], rawOffers=r.offers||[], rawMessages=r.messages||[];
     const oldJobIds=new Set((state.knownRemote.jobs||[]));
@@ -69,10 +70,10 @@ async function syncBackend(showAlert=false){
     const firstSync=!state.backendInitialized;
     const jobs=rawJobs.map(x=>({id:x.ID,title:x.TYTUL,cat:x.KATEGORIA,area:x.OBSZAR,price:x.CENA,when:x.TERMIN,desc:x.OPIS,status:x.STATUS||"open",qr:!!x.QR_ID,qrId:x.QR_ID||"",qrPoint:x.QR_PUNKT||"",author:x.AUTOR||"",createdAt:x.UTWORZONO||"",lat:x.LAT,lng:x.LNG,guestId:x.GUEST_ID||"",photo:"",shared:true}));
     const offers=rawOffers.map(x=>({id:x.ID,name:x.NAZWA,service:x.USŁUGA,cat:x.KATEGORIA,area:x.OBSZAR,desc:x.OPIS,availability:x.DOSTĘPNOŚĆ,author:x.AUTOR||"",createdAt:x.UTWORZONO||"",lat:x.LAT,lng:x.LNG,guestId:x.GUEST_ID||"",shared:true}));
-    const messages=rawMessages.map(x=>({id:x.ID,thread:x.THREAD,jobId:x.JOB_ID||"",offerId:x.OFFER_ID||"",text:x.TEKST,author:x.AUTOR||"",createdAt:x.UTWORZONO||"",guestId:x.GUEST_ID||"",me:x.AUTOR===state.name,shared:true}));
+    const messages=rawMessages.map(x=>({id:x.ID,thread:x.THREAD,jobId:x.JOB_ID||"",offerId:x.OFFER_ID||"",text:x.TEKST,author:x.AUTOR||"",createdAt:x.UTWORZONO||"",guestId:x.GUEST_ID||"",toGuestId:x.TO_GUEST_ID||"",me:(x.GUEST_ID&&String(x.GUEST_ID)===String(state.guestId)),shared:true}));
     const newJobs=firstSync?[]:jobs.filter(j=>!oldJobIds.has(j.id));
     const newOffers=firstSync?[]:offers.filter(o=>!oldOfferIds.has(o.id));
-    const newMessages=firstSync?[]:messages.filter(m=>!oldMsgIds.has(m.id) && m.author!==state.name);
+    const newMessages=firstSync?[]:messages.filter(m=>!oldMsgIds.has(m.id) && String(m.guestId||"")!==String(state.guestId));
     // Nie usuwaj lokalnych danych tylko dlatego, że chwilowo nie ma ich w odpowiedzi backendu.
     // To chroni m.in. zlecenia utworzone przed synchronizacją albo oczekujące na zapis.
     const remoteJobIds=new Set(jobs.map(j=>String(j.id)));
@@ -183,6 +184,7 @@ document.getElementById("app").addEventListener("click",function(e){
  if(action==="start-offer-chat"){e.preventDefault();startOfferChat(id)}
 });
 function show(page){
+ if(chatPollTimer){clearInterval(chatPollTimer);chatPollTimer=null;}
  document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
  const n=document.getElementById("n-"+page);if(n)n.classList.add("active");
  if(page==="home")home();if(page==="jobs")jobs();if(page==="add")add();if(page==="chat")chat();if(page==="notifications")notifications();if(page==="profile")profile();
@@ -318,7 +320,7 @@ function openOffer(id){
  const o=(state.offers||[]).find(x=>String(x.id)===String(id));if(!o){console.warn("WorkHub: nie znaleziono oferty",id);return;}
  document.getElementById('app').innerHTML=`<div class="card"><div class="muted">${esc(o.cat)} · 📍 ${esc(o.area)}</div><h2>👷 ${esc(o.name)}</h2><h3>${esc(o.service)}</h3><p>${esc(o.desc)}</p><div class="notice">🕐 Dostępność: <b>${esc(o.availability)}</b><br><br>Kontakt może zostać ustalony dobrowolnie przez czat WorkHub.</div><button class="primary" onclick='startOfferChat(${JSON.stringify(o.id)})' >💬 Napisz do wykonawcy</button><button class="secondary" style="margin-top:8px" onclick="show('jobs')">← Wróć</button></div>`;
 }
-function startOfferChat(id){state.currentOffer=id;save();show('chat')}
+function startOfferChat(id){state.current=null;state.currentOffer=String(id);save();show('chat')}
 
 function add(fromQR=false,forceType=""){
  const p=qrPoint();
@@ -447,23 +449,50 @@ function openJob(id){
  <button class="secondary" style="margin-top:8px" onclick="show('jobs')">← Wróć</button></div>`;
 }
 function startChat(id){const j=state.jobs.find(x=>String(x.id)===String(id));if(!j)return;state.current=String(j.id);state.currentOffer=null;save();show("chat")}
+function currentChatKey(){
+ const j=(state.jobs||[]).find(x=>String(x.id)===String(state.current));
+ const o=(state.offers||[]).find(x=>String(x.id)===String(state.currentOffer));
+ return j?{key:"job:"+j.id,job:j,offer:null,targetGuestId:String(j.guestId||"")}:o?{key:"offer:"+o.id,job:null,offer:o,targetGuestId:String(o.guestId||"")}:null;
+}
+function renderChat(){
+ const ctx=currentChatKey();
+ if(!ctx){document.getElementById("app").innerHTML=`<div class="card"><h2>💬 Czat</h2><div class="empty">Wybierz zlecenie albo ofertę, aby rozpocząć rozmowę.</div></div>`;return;}
+ const msgs=(state.messages||[]).filter(m=>String(m.thread)===String(ctx.key));
+ document.getElementById("app").innerHTML=`<div class="card"><div class="row"><div><h2>💬 Czat</h2><div class="muted">${ctx.job?`🔧 ${esc(ctx.job.title)} · 📍 ${esc(ctx.job.area)}`:`👷 ${esc(ctx.offer.name)} · ${esc(ctx.offer.service)}`}</div></div><span class="pill">wspólna baza</span></div>
+ <div class="chat" id="chatBox">${msgs.length?msgs.map(m=>`<div class="msg ${m.me?"me":"them"}"><div>${esc(m.text)}</div><div class="small muted" style="margin-top:4px">${m.me?"Ty":esc(m.author||"Użytkownik")}${m.shared?" · ✓":" · ⏳"}</div></div>`).join(""):`<div class="muted" style="text-align:center;padding:30px 10px">Tutaj można ustalić zakres, termin, cenę i dobrowolnie wymienić dane kontaktowe.</div>`}</div>
+ <div class="row" style="margin-top:8px"><input id="msg" placeholder="Napisz wiadomość..." onkeydown="if(event.key==='Enter')send()"><button id="sendBtn" class="primary" onclick="send()">Wyślij</button></div></div>`;
+ const box=document.getElementById("chatBox");if(box)box.scrollTop=box.scrollHeight;
+}
+async function refreshChat(){
+ if(document.getElementById("n-chat")?.classList.contains("active")){
+   const key=currentChatKey()?.key;
+   await syncBackend(false);
+   if(document.getElementById("n-chat")?.classList.contains("active") && currentChatKey()?.key===key)renderChat();
+ }
+}
 function chat(){
- const j=state.jobs.find(x=>x.id===state.current);
- const o=(state.offers||[]).find(x=>x.id===state.currentOffer);
- const key=j?('job:'+j.id):(o?('offer:'+o.id):'');
- const msgs=state.messages.filter(m=>m.thread===key || (!m.thread&&j&&m.job===j.id));
- document.getElementById("app").innerHTML=`<div class="card"><h2>💬 Czat</h2><div class="muted">${j?`🔧 ${esc(j.title)} · 📍 ${esc(j.area)}`:(o?`👷 ${esc(o.name)} · ${esc(o.service)}`:`Wybierz zlecenie lub ofertę.`)}</div>
- <div class="chat">${msgs.length?msgs.map(m=>`<div class="msg ${m.me?"me":"them"}">${esc(m.text)}</div>`).join(""):`<div class="muted" style="text-align:center;padding:30px 10px">Tutaj można ustalić zakres, termin, cenę i dobrowolnie wymienić dane kontaktowe.</div>`}</div>
- <div class="row" style="margin-top:8px"><input id="msg" placeholder="Napisz wiadomość..." onkeydown="if(event.key==='Enter')send()"><button class="primary" onclick="send()">Wyślij</button></div></div>`;
+ renderChat();
+ chatPollTimer=setInterval(refreshChat,5000);
+}
+async function send(){
+ const input=document.getElementById("msg");if(!input)return;
+ const v=input.value.trim();if(!v)return;
+ const ctx=currentChatKey();if(!ctx){alert("Najpierw wybierz zlecenie albo ofertę.");return;}
+ const btn=document.getElementById("sendBtn");if(btn)btn.disabled=true;
+ const msg={thread:ctx.key,job:ctx.job?String(ctx.job.id):"",jobId:ctx.job?String(ctx.job.id):"",offerId:ctx.offer?String(ctx.offer.id):"",text:v,me:true,author:state.name||"Gość",guestId:state.guestId,toGuestId:ctx.targetGuestId,shared:false,pending:true};
+ state.messages.push(msg);input.value="";save();renderChat();
+ if(!BACKEND_ENABLED){msg.shared=false;msg.pending=false;save();renderChat();if(btn)btn.disabled=false;return;}
+ try{
+   const r=await backendCall("sendMessage",{thread:ctx.key,jobId:ctx.job?String(ctx.job.id):"",offerId:ctx.offer?String(ctx.offer.id):"",text:v,author:state.name||"Gość",guestId:state.guestId,toGuestId:ctx.targetGuestId});
+   if(!r||!r.ok)throw new Error(r&&r.error||"Nie udało się zapisać wiadomości.");
+   msg.id=r.id;msg.shared=true;msg.pending=false;save();
+   await syncBackend(false);
+   renderChat();
+ }catch(e){
+   msg.pending=false;msg.failed=true;save();renderChat();alert("Wiadomość nie została zapisana w bazie. Sprawdź połączenie i spróbuj ponownie.");
+ }finally{if(btn)btn.disabled=false;}
 }
 
-function send(){
- const v=document.getElementById("msg").value.trim();if(!v)return;
- const thread=state.currentOffer?"offer:"+state.currentOffer:"job:"+state.current;
- const msg={thread,job:state.current,offerId:state.currentOffer||"",text:v,me:true,author:state.name||"Gość"};
- state.messages.push(msg);save();show("chat");
- if(BACKEND_ENABLED){backendCall("sendMessage",{thread,jobId:state.current||"",offerId:state.currentOffer||"",text:v,author:state.name||"Gość",guestId:state.guestId}).then(r=>{if(r&&r.ok){msg.id=r.id;msg.shared=true;save()}}).catch(e=>console.warn(e));}
-}
 function profile(){
  document.getElementById("app").innerHTML=`<div class="card"><h2>👤 Profil WorkHub</h2><label>Nazwa / pseudonim</label><input id="name" value="${esc(state.name)}"><label>Obszar działania</label><input id="profarea" value="${esc(state.area)}"><button class="primary" onclick="saveProfile()">Zapisz</button></div>
  <div class="card"><h3>Tryb użytkownika</h3><div class="grid"><button class="secondary" onclick="setMode('client')">📣 Zlecający</button><button class="green" onclick="setMode('worker')">🛠️ Wykonawca</button></div></div>
