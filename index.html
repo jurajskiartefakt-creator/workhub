@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1220">
-<title>WorkHub — lokalne zlecenia v5</title>
+<title>WorkHub — lokalne zlecenia v6</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--ink:#142033;--muted:#667085;--line:#e4e9f0;--blue:#2563eb;--green:#16a34a;--dark:#0b1220;--soft:#eef4ff}
@@ -22,7 +22,7 @@ input,textarea,select{width:100%;padding:12px;border:1px solid var(--line);borde
 .small{font-size:12px}.hero{text-align:center;padding:12px 4px 4px}.hero h1{margin:0 0 6px}.notice{background:#fff8df;border:1px solid #f4df91;padding:11px;border-radius:12px;font-size:12px}
 .qrpreview{display:flex;justify-content:center;padding:18px;background:#fff;border:1px dashed #cbd5e1;border-radius:16px;margin:12px 0}.tag2{display:inline-block;background:#eef4ff;color:#2451a6;border-radius:99px;padding:5px 9px;font-size:11px}
 .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat div{background:#f7f9fc;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-size:18px}
-.photo-preview{max-width:100%;max-height:220px;border-radius:14px;border:1px solid var(--line);margin-top:8px;display:none}.qr-action{background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:14px;margin-top:10px}.hide{display:none!important}
+.photo-preview{max-width:100%;max-height:220px;border-radius:14px;border:1px solid var(--line);margin-top:8px;display:none}.qr-action{background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:14px;margin-top:10px}.hide{display:none!important}.searchbox{background:#f7f9fc;border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}.chips{display:flex;gap:7px;overflow:auto;padding:2px 0 4px}.chip{white-space:nowrap;background:#fff;border:1px solid var(--line);color:#475467;border-radius:99px;padding:7px 10px;font-size:12px}.chip.active{background:#eaf1ff;color:#1744a2;border-color:#9bbcff}.empty{text-align:center;padding:24px 10px;color:var(--muted)}.offer{border:1px solid #dce7dd;border-radius:15px;padding:14px;margin:9px 0;background:#fbfffc}
 </style>
 </head>
 <body>
@@ -43,6 +43,11 @@ let state=JSON.parse(localStorage.getItem(KEY)||"null")||{
  {id:1,title:"Montaż karnisza",cat:"Montaż",area:"Zawiercie",distance:"1,8 km",price:"80–150 zł",when:"Dzisiaj",desc:"Potrzebuję montażu karnisza w salonie.",status:"open"},
  {id:2,title:"Koszenie trawy",cat:"Ogród",area:"Poręba",distance:"6,2 km",price:"120–180 zł",when:"Weekend",desc:"Działka około 500 m².",status:"open"},
  {id:3,title:"Drobna naprawa drzwi",cat:"Naprawy",area:"Zawiercie",distance:"3,1 km",price:"100–200 zł",when:"Do uzgodnienia",desc:"Drzwi wymagają regulacji i poprawienia zawiasu.",status:"open"}
+ ],
+ offers:[
+  {id:101,name:"Marek",service:"Montaż i drobne naprawy",cat:"Montaż",area:"Zawiercie",desc:"Karnisze, półki, uchwyty, drobne prace domowe.",availability:"Popołudnia"},
+  {id:102,name:"Ania",service:"Ogród i porządki",cat:"Ogród",area:"Poręba",desc:"Koszenie, przycinanie, porządki na działkach.",availability:"Weekendy"},
+  {id:103,name:"Tomek",service:"Transport lokalny",cat:"Transport",area:"Zawiercie",desc:"Mały transport i pomoc przy przewozie rzeczy.",availability:"Do uzgodnienia"}
  ],messages:[],current:null
 };
 function save(){
@@ -78,13 +83,45 @@ function home(){
 function setMode(m){state.mode=m;save();show(m==="client"?"add":"jobs")}
 function jobs(){
  const worker=state.mode==="worker";
- document.getElementById("app").innerHTML=`<div class="card"><div class="row"><div><h2>${worker?"Zlecenia w okolicy":"Lokalne zlecenia"}</h2><div class="muted">${esc(state.area)} i okolice</div></div><span class="pill">${state.jobs.length} ofert</span></div>
- <div class="grid" style="margin:10px 0"><button class="secondary" onclick="setMode('client')">📣 Zlecaj</button><button class="green" onclick="setMode('worker')">🛠️ Szukam</button></div>
- ${state.jobs.map(j=>`<div class="job"><div class="row"><b>${esc(j.title)}</b><span class="price">${esc(j.price)}</span></div>
- <div class="muted">${esc(j.cat)} · 📍 ${esc(j.area)} · ${esc(j.distance)}</div><div class="small">🕐 ${esc(j.when)} ${j.qr?`· 📲 QR ${esc(j.qrId||"")}`:""}</div>${j.qrPoint?`<div class="small">📍 ${esc(j.qrPoint)}</div>`:""}<p class="small">${esc(j.desc)}</p>${j.photo?`<img src="${j.photo}" alt="Zdjęcie zlecenia" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;margin:6px 0">`:""}
- <button class="secondary" onclick="openJob(${j.id})">Zobacz zlecenie</button></div>`).join("")}</div>
- <div class="card"><h3>🎯 Dopasowanie</h3><div class="muted">Docelowo wykonawca zobaczy przede wszystkim zlecenia zgodne z kategoriami umiejętności, obszarem i dostępnością.</div></div>`;
+ document.getElementById("app").innerHTML=`<div class="card"><div class="row"><div><h2>${worker?"Zlecenia w okolicy":"Lokalne zlecenia i oferty"}</h2><div class="muted">Szukaj po tytule, kategorii, okolicy, opisie lub wykonawcy.</div></div></div>
+ <div class="searchbox"><label>🔎 Wyszukiwarka</label><input id="search" placeholder="Np. malowanie, ogród, Zawiercie, transport…" oninput="filterJobs()"><div class="chips" id="chips">${["Wszystko","Naprawy","Montaż","Remont","Ogród","Transport","Sprzątanie","Pomoc techniczna"].map(c=>`<button class="chip ${c==='Wszystko'?'active':''}" onclick="setJobCat('${c.replace(/'/g,"\\'")}')">${c}</button>`).join("")}</div></div>
+ <div class="grid" style="margin:10px 0"><button id="tabJobs" class="primary" onclick="setJobTab('jobs')">🔧 Zlecenia <span id="jobCount"></span></button><button id="tabOffers" class="green" onclick="setJobTab('offers')">👷 Oferty wykonawców <span id="offerCount"></span></button></div>
+ <div id="results"></div>
+ <div class="card"><h3>📍 Lokalny zasięg</h3><div class="muted">Domyślnie pokazujemy ${esc(state.area)} i okolice. Wyszukiwarka działa również na innych obszarach.</div></div></div>`;
+ state.jobTab="jobs";state.jobCat="Wszystko";filterJobs();
 }
+function setJobTab(tab){state.jobTab=tab;filterJobs()}
+function setJobCat(cat){state.jobCat=cat;document.querySelectorAll('#chips .chip').forEach(b=>b.classList.toggle('active',b.textContent===cat));filterJobs()}
+function norm(v){return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
+function filterJobs(){
+ const q=norm(document.getElementById('search')?.value||'');
+ const cat=state.jobCat||'Wszystko';
+ const results=document.getElementById('results'); if(!results)return;
+ const jobs=state.jobs.filter(j=>{
+   const text=norm([j.title,j.desc,j.cat,j.area,j.qrPoint,j.qrId,j.price,j.when].join(' '));
+   return (!q||text.includes(q)) && (cat==='Wszystko'||norm(j.cat)===norm(cat));
+ });
+ const offers=(state.offers||[]).filter(o=>{
+   const text=norm([o.name,o.service,o.desc,o.cat,o.area,o.availability].join(' '));
+   return (!q||text.includes(q)) && (cat==='Wszystko'||norm(o.cat)===norm(cat));
+ });
+ document.getElementById('jobCount').textContent=`(${jobs.length})`;
+ document.getElementById('offerCount').textContent=`(${offers.length})`;
+ document.getElementById('tabJobs').className=state.jobTab==='jobs'?'primary':'secondary';
+ document.getElementById('tabOffers').className=state.jobTab==='offers'?'green':'secondary';
+ if(state.jobTab==='jobs'){
+   results.innerHTML=jobs.length?jobs.map(j=>`<div class="job"><div class="row"><b>${esc(j.title)}</b><span class="price">${esc(j.price)}</span></div>
+   <div class="muted">${esc(j.cat)} · 📍 ${esc(j.area)} · ${esc(j.distance)}</div><div class="small">🕐 ${esc(j.when)} ${j.qr?`· 📲 QR ${esc(j.qrId||'')}`:''}</div>${j.qrPoint?`<div class="small">📍 ${esc(j.qrPoint)}</div>`:''}<p class="small">${esc(j.desc)}</p>${j.photo?`<img src="${j.photo}" alt="Zdjęcie zlecenia" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;margin:6px 0">`:''}<button class="secondary" onclick="openJob(${j.id})">Zobacz zlecenie</button></div>`).join(''):`<div class="empty">Nie znaleziono zleceń dla podanych kryteriów.</div>`;
+ }else{
+   results.innerHTML=offers.length?offers.map(o=>`<div class="offer"><div class="row"><b>👷 ${esc(o.name)}</b><span class="tag2">${esc(o.cat)}</span></div><h3 style="margin-top:8px">${esc(o.service)}</h3><div class="muted">📍 ${esc(o.area)} · 🕐 ${esc(o.availability)}</div><p class="small">${esc(o.desc)}</p><button class="secondary" onclick="openOffer(${o.id})">Zobacz ofertę</button></div>`).join(''):`<div class="empty">Nie znaleziono ofert wykonawców dla podanych kryteriów.</div>`;
+ }
+}
+function openOffer(id){
+ const o=(state.offers||[]).find(x=>x.id===id);if(!o)return;
+ document.getElementById('app').innerHTML=`<div class="card"><div class="muted">${esc(o.cat)} · 📍 ${esc(o.area)}</div><h2>👷 ${esc(o.name)}</h2><h3>${esc(o.service)}</h3><p>${esc(o.desc)}</p><div class="notice">🕐 Dostępność: <b>${esc(o.availability)}</b><br><br>Kontakt może zostać ustalony dobrowolnie przez czat WorkHub.</div><button class="primary" onclick="startOfferChat(${o.id})">💬 Napisz do wykonawcy</button><button class="secondary" style="margin-top:8px" onclick="show('jobs')">← Wróć</button></div>`;
+}
+function startOfferChat(id){state.currentOffer=id;save();show('chat')}
+
 function add(fromQR=false){
  const p=qrPoint();
  document.getElementById("app").innerHTML=`<div class="card"><h2>${p?"⚠️ Zgłoszenie potrzeby":"➕ Nowe zlecenie"}</h2><div class="muted">${p?"Opisz problem, usterkę albo pracę potrzebną w tym punkcie.":"Dodaj potrzebę. Szczegóły, termin i cenę strony ustalają między sobą."}</div>
@@ -181,12 +218,16 @@ function openJob(id){
 }
 function startChat(id){state.current=id;save();show("chat")}
 function chat(){
- const j=state.jobs.find(x=>x.id===state.current)||state.jobs[0],msgs=state.messages.filter(m=>m.job===j.id);
- document.getElementById("app").innerHTML=`<div class="card"><h2>💬 Czat zlecenia</h2><div class="muted">🔧 ${esc(j.title)} · 📍 ${esc(j.area)}</div>
- <div class="chat">${msgs.length?msgs.map(m=>`<div class="msg ${m.me?"me":"them"}">${esc(m.text)}</div>`).join(""):`<div class="muted" style="text-align:center;padding:30px 10px">Tutaj strony mogą ustalić zakres, termin, cenę i dobrowolnie wymienić dane kontaktowe.</div>`}</div>
+ const j=state.jobs.find(x=>x.id===state.current);
+ const o=(state.offers||[]).find(x=>x.id===state.currentOffer);
+ const key=j?('job:'+j.id):('offer:'+o.id);
+ const msgs=state.messages.filter(m=>m.thread===key || (!m.thread&&j&&m.job===j.id));
+ document.getElementById("app").innerHTML=`<div class="card"><h2>💬 Czat</h2><div class="muted">${j?`🔧 ${esc(j.title)} · 📍 ${esc(j.area)}`:`👷 ${esc(o.name)} · ${esc(o.service)}`}</div>
+ <div class="chat">${msgs.length?msgs.map(m=>`<div class="msg ${m.me?"me":"them"}">${esc(m.text)}</div>`).join(""):`<div class="muted" style="text-align:center;padding:30px 10px">Tutaj można ustalić zakres, termin, cenę i dobrowolnie wymienić dane kontaktowe.</div>`}</div>
  <div class="row" style="margin-top:8px"><input id="msg" placeholder="Napisz wiadomość..." onkeydown="if(event.key==='Enter')send()"><button class="primary" onclick="send()">Wyślij</button></div></div>`;
 }
-function send(){const v=document.getElementById("msg").value.trim();if(!v)return;state.messages.push({job:state.current,text:v,me:true});save();show("chat")}
+
+function send(){const v=document.getElementById("msg").value.trim();if(!v)return;const thread=state.currentOffer?"offer:"+state.currentOffer:"job:"+state.current;state.messages.push({thread,job:state.current,text:v,me:true});save();show("chat")}
 function profile(){
  document.getElementById("app").innerHTML=`<div class="card"><h2>👤 Profil WorkHub</h2><label>Nazwa / pseudonim</label><input id="name" value="${esc(state.name)}"><label>Obszar działania</label><input id="profarea" value="${esc(state.area)}"><button class="primary" onclick="saveProfile()">Zapisz</button></div>
  <div class="card"><h3>Tryb użytkownika</h3><div class="grid"><button class="secondary" onclick="setMode('client')">📣 Zlecający</button><button class="green" onclick="setMode('worker')">🛠️ Wykonawca</button></div></div>
